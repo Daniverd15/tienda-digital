@@ -62,6 +62,7 @@ def serialize_order(order: Order) -> dict:
             {
                 "id": item.id,
                 "variant_id": item.variant_id,
+                "product_id": item.variant.product_id if item.variant else None,
                 "product_name": item.product_name,
                 "variant_description": item.variant_description,
                 "quantity": item.quantity,
