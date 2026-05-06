@@ -227,7 +227,7 @@ class Notification(Base):
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=True)
     title = Column(String(160), nullable=False)
     message = Column(Text, nullable=False)
-    read = Column(Boolean, nullable=False, default=False)
+    read = Column("read", Boolean, nullable=False, default=False, quote=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
     user = relationship("User")
@@ -301,4 +301,3 @@ class SystemLog(Base):
     message = Column(Text, nullable=False)
     context = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
