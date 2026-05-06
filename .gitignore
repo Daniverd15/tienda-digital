@@ -1,0 +1,27 @@
+# Entornos
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Backend
+backend/.pytest_cache/
+backend/htmlcov/
+backend/.coverage
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Base de datos y respaldos locales
+database/backups/
+*.sql.gz
+
+# IDE / SO
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
