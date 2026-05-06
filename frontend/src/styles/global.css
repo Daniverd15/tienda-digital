@@ -385,6 +385,105 @@ textarea {
   color: #fff;
 }
 
+.catalog-search {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) repeat(3, minmax(130px, 0.8fr)) auto;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1.2rem;
+}
+
+.catalog-search .primary-button {
+  margin: 0;
+}
+
+.check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.check-inline input {
+  width: auto;
+}
+
+.product-detail {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(300px, 1.05fr);
+  gap: clamp(1rem, 4vw, 2rem);
+}
+
+.product-gallery,
+.detail-panel,
+.reviews-panel {
+  min-width: 0;
+}
+
+.detail-image {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.thumb-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.thumb-row img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.detail-panel h1 {
+  margin: 0.5rem 0 0.75rem;
+  font-size: clamp(2rem, 5vw, 3.7rem);
+  line-height: 1;
+}
+
+.detail-panel p {
+  line-height: 1.7;
+}
+
+.rating-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #ba7a00;
+}
+
+.detail-price {
+  display: block;
+  margin: 1rem 0;
+  font-size: 1.8rem;
+}
+
+.alert.success {
+  background: #edf6f1;
+  color: #1f7a5c;
+}
+
+.reviews-panel {
+  grid-column: 1 / -1;
+}
+
+.review-card {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.7rem 0;
+  padding: 1rem;
+  border: 1px solid #dce5da;
+  border-radius: 8px;
+  background: #fff;
+}
+
 @media (max-width: 860px) {
   .topbar {
     grid-template-columns: 1fr;
@@ -394,5 +493,10 @@ textarea {
   .nav-actions {
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .catalog-search,
+  .product-detail {
+    grid-template-columns: 1fr;
   }
 }

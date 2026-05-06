@@ -5,6 +5,7 @@ import Catalog from './pages/Catalog';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Placeholder from './pages/Placeholder';
+import ProductDetail from './pages/ProductDetail';
 import Register from './pages/Register';
 import ProtectedRoute from './routes/ProtectedRoute';
 
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/admin" element={<Placeholder title="Panel administrativo" />} />
           </Route>
           <Route path="/catalogo" element={<Catalog />} />
+          <Route path="/productos/:id" element={<ProductDetail />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
