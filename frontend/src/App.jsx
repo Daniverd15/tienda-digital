@@ -7,6 +7,7 @@ import Checkout from './pages/Checkout';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Placeholder from './pages/Placeholder';
+import PaymentResult from './pages/PaymentResult';
 import ProductDetail from './pages/ProductDetail';
 import Register from './pages/Register';
 import ProtectedRoute from './routes/ProtectedRoute';
@@ -23,6 +24,7 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route path="/carrito" element={<Cart />} />
             <Route path="/checkout" element={<Checkout />} />
+            <Route path="/pago" element={<PaymentResult />} />
             <Route path="/mis-pedidos" element={<Placeholder title="Mis pedidos" />} />
           </Route>
           <Route element={<ProtectedRoute role="admin" />}>

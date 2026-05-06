@@ -540,6 +540,21 @@ textarea {
   top: 5.2rem;
 }
 
+.payment-page {
+  display: grid;
+  place-items: start center;
+}
+
+.payment-page .summary-panel {
+  width: min(100%, 520px);
+  position: static;
+}
+
+.payment-result {
+  display: grid;
+  gap: 0.75rem;
+}
+
 @media (max-width: 860px) {
   .topbar {
     grid-template-columns: 1fr;
