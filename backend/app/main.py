@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import admin_catalog, admin_finance, auth, cart, catalog, orders
+from app.api import admin_catalog, admin_finance, auth, cart, catalog, orders, settings_reviews
 from app.core.config import get_settings
 
 
@@ -23,3 +23,4 @@ app.include_router(cart.router)
 app.include_router(orders.router)
 app.include_router(admin_catalog.router)
 app.include_router(admin_finance.router)
+app.include_router(settings_reviews.router)
