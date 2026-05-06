@@ -3,7 +3,9 @@
 ## Evidencia Git
 
 ```text
-67e88c9 (HEAD -> master) chore(RNF-03): usabilidad mantenibilidad respaldo trazabilidad y observabilidad
+9bfc087 (HEAD -> master) fix: compatibilidad mysql para notificaciones
+7987cce docs: documentacion final instalacion endpoints backlog y pruebas
+67e88c9 chore(RNF-03): usabilidad mantenibilidad respaldo trazabilidad y observabilidad
 7d5f9f7 security(RNF-02): seguridad privacidad e integridad transaccional
 8df2a52 perf(RNF-01): monitoreo rendimiento disponibilidad y concurrencia
 0358ddb chore: esquema mysql y datos iniciales de prueba
@@ -45,4 +47,3 @@ c1e3523 feat(RF-01): interfaces de login registro y sesion
 | RNF-01 | El sistema debe garantizar rendimiento, disponibilidad y capacidad concurrente bajo carga normal. | Respuesta adecuada, concurrencia y salud. | Tiempos; concurrencia cliente/admin; disponibilidad; optimizar. | Tomas | `8df2a52` |
 | RNF-02 | El sistema debe garantizar seguridad, privacidad e integridad de la informacion y las transacciones. | HTTPS preparado, sesiones seguras, roles, minimo privilegio e integridad. | TLS; contrasenas; admin; privilegio; transacciones. | Tomas | `7d5f9f7` |
 | RNF-03 | El sistema debe garantizar usabilidad, compatibilidad, mantenibilidad, respaldo, trazabilidad y observabilidad. | Accesibilidad, multidispositivo, arquitectura, backup y logs. | Usabilidad; responsive; arquitectura; respaldo; observabilidad. | Tomas | `67e88c9` |
-
