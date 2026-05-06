@@ -15,7 +15,6 @@ import Login from './pages/Login';
 import MyOrders from './pages/MyOrders';
 import Notifications from './pages/Notifications';
 import OrderDetail from './pages/OrderDetail';
-import Placeholder from './pages/Placeholder';
 import PaymentResult from './pages/PaymentResult';
 import ProductDetail from './pages/ProductDetail';
 import Register from './pages/Register';
