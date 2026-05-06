@@ -2,6 +2,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import { AuthProvider } from './context/AuthContext';
 import Catalog from './pages/Catalog';
+import Cart from './pages/Cart';
+import Checkout from './pages/Checkout';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Placeholder from './pages/Placeholder';
@@ -19,7 +21,8 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/registro" element={<Register />} />
           <Route element={<ProtectedRoute />}>
-            <Route path="/carrito" element={<Placeholder title="Carrito" />} />
+            <Route path="/carrito" element={<Cart />} />
+            <Route path="/checkout" element={<Checkout />} />
             <Route path="/mis-pedidos" element={<Placeholder title="Mis pedidos" />} />
           </Route>
           <Route element={<ProtectedRoute role="admin" />}>
