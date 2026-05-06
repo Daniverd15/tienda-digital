@@ -237,6 +237,9 @@ def create_order(payload: OrderCreate, current_user: User = Depends(require_cust
     except HTTPException:
         db.rollback()
         raise
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.get("/orders/my")

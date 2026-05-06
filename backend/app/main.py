@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import admin_catalog, admin_finance, auth, cart, catalog, health, orders, settings_reviews
 from app.core.config import get_settings
 from app.utils.observability import response_time_middleware
+from app.utils.security_headers import security_headers_middleware
 
 
 settings = get_settings()
@@ -19,6 +20,7 @@ app.add_middleware(
 )
 
 app.middleware("http")(response_time_middleware)
+app.middleware("http")(security_headers_middleware)
 
 app.include_router(auth.router)
 app.include_router(catalog.router)
