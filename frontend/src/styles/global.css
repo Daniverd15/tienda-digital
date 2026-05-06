@@ -581,6 +581,33 @@ textarea {
   grid-template-columns: 1fr 0.8fr 0.8fr 180px;
 }
 
+.admin-grid-page {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.admin-section {
+  display: grid;
+  grid-template-columns: 330px minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.admin-section form {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1rem;
+  border: 1px solid #dce5da;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.row-button {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
 @media (max-width: 860px) {
   .topbar {
     grid-template-columns: 1fr;
@@ -605,7 +632,8 @@ textarea {
 
   .row-card,
   .order-summary,
-  .admin-row {
+  .admin-row,
+  .admin-section {
     grid-template-columns: 1fr;
   }
 }

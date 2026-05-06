@@ -2,6 +2,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import { AuthProvider } from './context/AuthContext';
 import AdminOrders from './pages/AdminOrders';
+import AdminCatalog from './pages/AdminCatalog';
+import AdminHome from './pages/AdminHome';
 import Catalog from './pages/Catalog';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
@@ -34,7 +36,8 @@ export default function App() {
             <Route path="/notificaciones" element={<Notifications />} />
           </Route>
           <Route element={<ProtectedRoute role="admin" />}>
-            <Route path="/admin" element={<Placeholder title="Panel administrativo" />} />
+            <Route path="/admin" element={<AdminHome />} />
+            <Route path="/admin/catalogo" element={<AdminCatalog />} />
             <Route path="/admin/pedidos" element={<AdminOrders />} />
           </Route>
           <Route path="/catalogo" element={<Catalog />} />
