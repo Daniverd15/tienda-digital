@@ -1,109 +1,206 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Star } from 'lucide-react';
+import { ShoppingCart, Star } from 'lucide-react';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useAsync } from '../hooks/useAsync';
+import { useToast } from '../context/ToastContext';
+
+function StarRating({ rating, count }) {
+  return (
+    <div className="rating-row">
+      {[1,2,3,4,5].map((i) => (
+        <Star
+          key={i}
+          size={16}
+          fill={i <= Math.round(rating) ? 'currentColor' : 'none'}
+          color={i <= Math.round(rating) ? '#ca8a04' : '#c5ccbf'}
+        />
+      ))}
+      <strong style={{ color: 'var(--neutral-900)', marginLeft: 4 }}>{Number(rating || 0).toFixed(1)}</strong>
+      <span>({count} reseña{count !== 1 ? 's' : ''})</span>
+    </div>
+  );
+}
 
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const toast = useToast();
   const [variantId, setVariantId] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [message, setMessage] = useState('');
+  const [activeImg, setActiveImg] = useState(0);
+  const [adding, setAdding] = useState(false);
+
   const { data, loading, error } = useAsync(async () => {
-    const [product, reviews] = await Promise.all([api.get(`/products/${id}`), api.get(`/products/${id}/reviews`)]);
+    const [product, reviews] = await Promise.all([
+      api.get(`/products/${id}`),
+      api.get(`/products/${id}/reviews`),
+    ]);
     return { product: product.data, reviews: reviews.data };
   }, [id]);
 
   const selectedVariant = useMemo(
-    () => data?.product?.variants.find((variant) => String(variant.id) === String(variantId)),
-    [data, variantId]
+    () => data?.product?.variants.find((v) => String(v.id) === String(variantId)),
+    [data, variantId],
   );
 
-  if (loading) return <div className="state">Cargando producto...</div>;
-  if (error) return <div className="state error">{error}</div>;
+  if (loading) {
+    return (
+      <main className="page-shell">
+        <div className="product-detail">
+          <div className="skeleton skeleton-image" />
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="skeleton skeleton-text" style={{ width: `${80 - i * 10}%`, height: i === 0 ? 36 : 16 }} />
+            ))}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (error) return <div className="state error">Producto no encontrado.</div>;
 
   const product = data.product;
-  const images = product.gallery?.length ? product.gallery : [{ id: 'main', image_url: product.image_url, alt_text: product.name }];
+  const images = product.gallery?.length
+    ? product.gallery
+    : [{ id: 'main', image_url: product.image_url || 'https://images.unsplash.com/photo-1523381294911-8d3cead13475?w=800&q=80', alt_text: product.name }];
 
   const addToCart = async () => {
-    setMessage('');
-    if (!isAuthenticated) {
-      navigate('/login');
-      return;
-    }
-    if (!selectedVariant || selectedVariant.stock < quantity) {
-      setMessage('Selecciona una variante con stock suficiente.');
-      return;
-    }
-    await api.post('/cart/items', { variant_id: selectedVariant.id, quantity });
-    setMessage('Producto agregado al carrito.');
+    if (!isAuthenticated) { navigate('/login'); return; }
+    if (!selectedVariant) { toast('Selecciona una variante primero.', 'warning'); return; }
+    if (selectedVariant.stock < 1) { toast('Esta variante no tiene stock disponible.', 'error'); return; }
+    if (quantity > selectedVariant.stock) { toast('Cantidad mayor al stock disponible.', 'error'); return; }
+    setAdding(true);
+    try {
+      await api.post('/cart/items', { variant_id: selectedVariant.id, quantity });
+      toast('Producto agregado al carrito.', 'success', '¡Listo!');
+    } catch (err) {
+      toast(err.response?.data?.detail || 'No se pudo agregar al carrito.', 'error');
+    } finally { setAdding(false); }
   };
 
   return (
-    <main className="page-shell product-detail">
-      <section className="product-gallery">
-        <img className="detail-image" src={images[0].image_url} alt={images[0].alt_text || product.name} />
-        <div className="thumb-row">
-          {images.map((image) => (
-            <img key={image.id} src={image.image_url} alt={image.alt_text || product.name} />
-          ))}
-        </div>
-      </section>
-      <section className="detail-panel">
-        <span className="category-chip">{product.category_name}</span>
-        <h1>{product.name}</h1>
-        <p>{product.long_description || product.description}</p>
-        <div className="rating-row">
-          <Star size={18} fill="currentColor" />
-          <strong>{product.average_rating || 0}</strong>
-          <span>({product.reviews_count} resenas)</span>
-        </div>
-        <strong className="detail-price">${Number(product.base_price).toLocaleString('es-CO')}</strong>
-        <label>
-          Variante
-          <select value={variantId} onChange={(event) => setVariantId(event.target.value)} required>
-            <option value="">Selecciona talla, color o SKU</option>
-            {product.variants.map((variant) => (
-              <option key={variant.id} value={variant.id} disabled={variant.stock <= 0}>
-                {variant.sku} | {variant.color || 'sin color'} | {variant.size || variant.custom_attribute || 'unica'} | stock {variant.stock}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Cantidad
-          <input
-            type="number"
-            min="1"
-            max={selectedVariant?.stock || 1}
-            value={quantity}
-            onChange={(event) => setQuantity(Number(event.target.value))}
+    <main className="page-shell">
+      <div className="product-detail">
+        {/* Gallery */}
+        <section className="product-gallery">
+          <img
+            className="detail-image"
+            src={images[activeImg]?.image_url || images[0]?.image_url}
+            alt={images[activeImg]?.alt_text || product.name}
           />
-        </label>
-        {selectedVariant ? (
-          <p className={selectedVariant.stock > 0 ? 'alert success' : 'alert error'}>
-            {selectedVariant.stock > 0 ? 'Variante disponible para agregar al carrito.' : 'Variante sin stock.'}
-          </p>
-        ) : (
-          <p className="alert">Selecciona una variante disponible para continuar.</p>
-        )}
-        {message && <p className={message.includes('agregado') ? 'alert success' : 'alert error'}>{message}</p>}
-        <button className="primary-button" onClick={addToCart}>Agregar al carrito</button>
-      </section>
-      <section className="reviews-panel">
-        <h2>Resenas</h2>
-        {data.reviews.map((review) => (
-          <article key={review.id} className="review-card">
-            <strong>{review.user_name}</strong>
-            <span>{'★'.repeat(review.rating)}</span>
-            <p>{review.comment}</p>
-          </article>
-        ))}
-        {data.reviews.length === 0 && <p>No hay resenas publicadas todavia.</p>}
-      </section>
+          {images.length > 1 && (
+            <div className="thumb-row">
+              {images.map((img, i) => (
+                <img
+                  key={img.id}
+                  src={img.image_url}
+                  alt={img.alt_text || product.name}
+                  className={i === activeImg ? 'active' : ''}
+                  onClick={() => setActiveImg(i)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Info */}
+        <section className="detail-panel">
+          <span className="category-chip">{product.category_name}</span>
+          <h1>{product.name}</h1>
+          <StarRating rating={product.average_rating} count={product.reviews_count} />
+          <p>{product.long_description || product.description}</p>
+          <strong className="detail-price">${Number(product.base_price).toLocaleString('es-CO')}</strong>
+
+          {/* Variant picker */}
+          <label>
+            Variante
+            <select value={variantId} onChange={(e) => { setVariantId(e.target.value); setQuantity(1); }} required>
+              <option value="">Selecciona talla / color / SKU</option>
+              {product.variants.map((v) => (
+                <option key={v.id} value={v.id} disabled={v.stock <= 0}>
+                  {[v.size, v.color, v.custom_attribute].filter(Boolean).join(' · ')} — {v.sku}
+                  {v.stock <= 0 ? ' (agotado)' : ` (${v.stock} disponibles)`}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {selectedVariant && (
+            <>
+              <label>
+                Cantidad
+                <input
+                  type="number"
+                  min="1"
+                  max={selectedVariant.stock}
+                  value={quantity}
+                  onChange={(e) => setQuantity(Math.max(1, Math.min(Number(e.target.value), selectedVariant.stock)))}
+                />
+              </label>
+              <div
+                className={`alert ${selectedVariant.stock > 0 ? 'success' : 'error'}`}
+                style={{ marginBottom: '0.75rem' }}
+              >
+                {selectedVariant.stock > 0
+                  ? `✓ ${selectedVariant.stock} unidades disponibles para esta variante`
+                  : '✗ Variante sin stock — selecciona otra'}
+              </div>
+            </>
+          )}
+
+          <button
+            className="btn btn-primary btn-full btn-lg"
+            onClick={addToCart}
+            disabled={adding || (selectedVariant && selectedVariant.stock <= 0)}
+            style={{ gap: '0.6rem' }}
+          >
+            <ShoppingCart size={18} />
+            {adding ? 'Agregando…' : 'Agregar al carrito'}
+          </button>
+
+          {!isAuthenticated && (
+            <p className="alert info" style={{ marginTop: '0.75rem' }}>
+              <a href="/login" style={{ color: 'var(--info-text)', fontWeight: 700 }}>Inicia sesión</a> para agregar al carrito.
+            </p>
+          )}
+
+          {/* Extra info */}
+          <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--neutral-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--neutral-200)' }}>
+            <div style={{ fontWeight: 700, marginBottom: '0.5rem', fontSize: '0.875rem' }}>Información del producto</div>
+            <div style={{ display: 'grid', gap: '0.3rem', fontSize: '0.8125rem', color: 'var(--neutral-600)' }}>
+              <div>✓ Precio base: ${Number(product.base_price).toLocaleString('es-CO')}</div>
+              <div>✓ {product.variants.length} variante(s) disponible(s)</div>
+              <div>✓ Stock en tiempo real verificado</div>
+            </div>
+          </div>
+        </section>
+
+        {/* Reviews */}
+        <section className="reviews-panel">
+          <div className="section-heading">
+            <h2>Reseñas</h2>
+            {product.reviews_count > 0 && <span style={{ color: 'var(--neutral-500)', fontSize: '0.875rem' }}>{product.reviews_count} reseña(s)</span>}
+          </div>
+          {data.reviews.length === 0 ? (
+            <div className="state">Sé el primero en dejar una reseña sobre este producto.</div>
+          ) : (
+            data.reviews.map((review) => (
+              <article key={review.id} className="review-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong>{review.user_name}</strong>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--neutral-400)' }}>Compra verificada</span>
+                </div>
+                <div className="stars">{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</div>
+                <p>{review.comment}</p>
+              </article>
+            ))
+          )}
+        </section>
+      </div>
     </main>
   );
 }

@@ -1,23 +1,25 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { ShieldCheck, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 export default function Register() {
   const { register } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const onSubmit = async (event) => {
-    event.preventDefault();
-    setError('');
+  const onSubmit = async (e) => {
+    e.preventDefault();
     setLoading(true);
     try {
       await register(form);
+      toast('¡Cuenta creada exitosamente!', 'success', 'Bienvenido');
       navigate('/catalogo', { replace: true });
     } catch (err) {
-      setError(err.response?.data?.detail || 'No fue posible crear la cuenta.');
+      toast(err.response?.data?.detail || 'No se pudo crear la cuenta.', 'error', 'Error de registro');
     } finally {
       setLoading(false);
     }
@@ -26,43 +28,70 @@ export default function Register() {
   return (
     <section className="auth-page">
       <form className="auth-card" onSubmit={onSubmit}>
-        <span className="eyebrow">Cliente nuevo</span>
+        <div className="auth-logo">
+          <span className="brand-mark">DU</span>
+          <strong>Distrito Urbano</strong>
+        </div>
         <h1>Crear cuenta</h1>
-        {error && <p className="alert error">{error}</p>}
+        <p className="auth-sub">Únete y empieza a comprar en segundos.</p>
+
         <label>
-          Nombre
-          <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+          Nombre completo *
+          <input
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Tu nombre"
+            autoComplete="name"
+            required
+          />
         </label>
         <label>
-          Correo
+          Correo electrónico *
           <input
             type="email"
             value={form.email}
-            onChange={(event) => setForm({ ...form, email: event.target.value })}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            placeholder="tu@email.com"
+            autoComplete="email"
             required
           />
         </label>
         <label>
-          Telefono
-          <input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+          Teléfono
+          <input
+            type="tel"
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            placeholder="+57 300 000 0000"
+            autoComplete="tel"
+          />
         </label>
         <label>
-          Contrasena
+          Contraseña *
           <input
             type="password"
             value={form.password}
-            onChange={(event) => setForm({ ...form, password: event.target.value })}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            placeholder="Mín. 8 caracteres, mayúscula y número"
+            autoComplete="new-password"
             required
+            minLength={8}
           />
         </label>
-        <button className="primary-button" disabled={loading}>
-          {loading ? 'Creando...' : 'Registrarme'}
+
+        <button className="btn btn-primary btn-full" style={{ marginTop: '0.75rem' }} disabled={loading}>
+          <UserPlus size={16} />
+          {loading ? 'Creando cuenta…' : 'Registrarme'}
         </button>
-        <p>
-          Ya tienes cuenta? <Link to="/login">Ingresa</Link>
-        </p>
+
+        <div className="auth-footer">
+          ¿Ya tienes cuenta? <Link to="/login">Inicia sesión</Link>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '1rem', fontSize: '0.78rem', color: 'var(--neutral-400)' }}>
+          <ShieldCheck size={13} /> Tu información está segura y encriptada
+        </div>
       </form>
     </section>
   );
 }
-

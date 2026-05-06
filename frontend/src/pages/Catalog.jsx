@@ -103,7 +103,7 @@ export default function Catalog() {
           />
           Con stock
         </label>
-        <button className="primary-button" disabled={searching}>{searching ? 'Buscando...' : 'Buscar'}</button>
+        <button className="btn btn-primary" style={{ margin: 0, width: 'auto' }} disabled={searching}>{searching ? 'Buscando…' : 'Buscar'}</button>
       </form>
       <div className="product-grid">
         {products.map((product) => (
