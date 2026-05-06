@@ -555,6 +555,32 @@ textarea {
   gap: 0.75rem;
 }
 
+.table-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.row-card,
+.order-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  align-items: center;
+  padding: 1rem;
+  border: 1px solid #dce5da;
+  border-radius: 8px;
+  background: #fff;
+  text-decoration: none;
+}
+
+.row-card.muted {
+  opacity: 0.72;
+}
+
+.admin-row {
+  grid-template-columns: 1fr 0.8fr 0.8fr 180px;
+}
+
 @media (max-width: 860px) {
   .topbar {
     grid-template-columns: 1fr;
@@ -575,5 +601,11 @@ textarea {
 
   .cart-item {
     grid-template-columns: 72px 1fr;
+  }
+
+  .row-card,
+  .order-summary,
+  .admin-row {
+    grid-template-columns: 1fr;
   }
 }
