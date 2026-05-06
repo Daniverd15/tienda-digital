@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth
+from app.api import auth, catalog
 from app.core.config import get_settings
 
 
@@ -18,4 +18,4 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
-
+app.include_router(catalog.router)
