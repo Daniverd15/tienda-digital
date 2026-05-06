@@ -10,13 +10,12 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
+    "axios": "latest",
+    "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
     "react-router-dom": "latest",
-    "axios": "latest",
-    "lucide-react": "latest"
-  },
-  "devDependencies": {}
+    "recharts": "^3.8.1",
+    "vite": "latest"
+  }
 }
-

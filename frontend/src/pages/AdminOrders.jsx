@@ -1,41 +1,229 @@
+import { useState } from 'react';
+import { Search, RefreshCw, Eye } from 'lucide-react';
 import api from '../api/client';
 import { useAsync } from '../hooks/useAsync';
+import AdminLayout from '../components/AdminLayout';
+import { OrderStatusBadge, PaymentStatusBadge } from '../components/Badge';
+import Modal from '../components/Modal';
+import { useToast } from '../context/ToastContext';
 
-const statuses = ['pendiente_pago', 'preparacion', 'enviado', 'entregado', 'cancelado', 'rechazado'];
+const ALL_STATUSES = ['todos', 'pendiente_pago', 'preparacion', 'enviado', 'entregado', 'cancelado', 'rechazado'];
+const NEXT_STATUSES = ['pendiente_pago', 'preparacion', 'enviado', 'entregado', 'cancelado', 'rechazado'];
+const COP = (v) => `$${Number(v || 0).toLocaleString('es-CO')}`;
 
 export default function AdminOrders() {
-  const { data: orders, loading, error, setData } = useAsync(async () => {
+  const toast = useToast();
+  const [statusFilter, setStatusFilter] = useState('todos');
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(null);
+
+  const { data: orders = [], loading, error, setData, refetch } = useAsync(async () => {
     const { data } = await api.get('/admin/orders');
     return data;
   }, []);
 
   const updateStatus = async (order, status) => {
-    const { data } = await api.put(`/admin/orders/${order.id}/status`, { status });
-    setData(orders.map((item) => (item.id === order.id ? data : item)));
+    try {
+      const { data } = await api.put(`/admin/orders/${order.id}/status`, { status });
+      setData(orders.map((o) => (o.id === order.id ? data : o)));
+      if (selected?.id === order.id) setSelected(data);
+      toast(`Pedido actualizado a "${status}".`, 'success');
+    } catch (err) {
+      toast(err.response?.data?.detail || 'Error al actualizar estado.', 'error');
+    }
   };
 
-  if (loading) return <div className="state">Cargando pedidos administrativos...</div>;
-  if (error) return <div className="state error">{error}</div>;
+  if (loading) return <AdminLayout><div className="state">Cargando pedidos...</div></AdminLayout>;
+  if (error)   return <AdminLayout><div className="state error">{error}</div></AdminLayout>;
+
+  const filtered = orders.filter((o) => {
+    const matchStatus = statusFilter === 'todos' || o.status === statusFilter;
+    const matchSearch = !search || o.order_code.toLowerCase().includes(search.toLowerCase()) || (o.contact_email || '').toLowerCase().includes(search.toLowerCase());
+    return matchStatus && matchSearch;
+  });
+
+  const counts = ALL_STATUSES.reduce((acc, s) => {
+    acc[s] = s === 'todos' ? orders.length : orders.filter((o) => o.status === s).length;
+    return acc;
+  }, {});
 
   return (
-    <main className="page-shell">
-      <span className="eyebrow">Operacion</span>
-      <h1>Gestion de pedidos</h1>
-      <div className="table-list">
-        {orders.map((order) => (
-          <article className="row-card admin-row" key={order.id}>
-            <strong>{order.order_code}</strong>
-            <span>Pago {order.payment_status}</span>
-            <span>${Number(order.total).toLocaleString('es-CO')}</span>
-            <select value={order.status} onChange={(event) => updateStatus(order, event.target.value)}>
-              {statuses.map((status) => (
-                <option key={status} value={status}>{status}</option>
-              ))}
-            </select>
-          </article>
+    <AdminLayout>
+      <div className="page-header">
+        <div className="page-header-left">
+          <span className="page-eyebrow">Operación</span>
+          <h1 className="page-title">Gestión de pedidos</h1>
+        </div>
+        <div className="page-actions">
+          <span style={{ fontSize: '0.875rem', color: '#677067' }}>{orders.length} pedidos totales</span>
+        </div>
+      </div>
+
+      {/* Status filter chips */}
+      <div className="filter-row" style={{ marginBottom: '1rem' }}>
+        {ALL_STATUSES.map((s) => (
+          <button
+            key={s}
+            className={`filter-chip${statusFilter === s ? ' active' : ''}`}
+            onClick={() => setStatusFilter(s)}
+          >
+            {s === 'todos' ? 'Todos' : s.replace('_', ' ')}
+            {counts[s] > 0 && (
+              <span style={{
+                background: statusFilter === s ? 'rgba(255,255,255,0.3)' : 'var(--neutral-200)',
+                color: statusFilter === s ? '#fff' : 'var(--neutral-600)',
+                borderRadius: 99,
+                fontSize: '0.7rem',
+                padding: '0px 6px',
+                fontWeight: 800,
+              }}>
+                {counts[s]}
+              </span>
+            )}
+          </button>
         ))}
       </div>
-    </main>
+
+      {/* Search bar */}
+      <div className="admin-search-bar" style={{ marginBottom: '1.25rem' }}>
+        <div style={{ position: 'relative', flex: 1, maxWidth: 360 }}>
+          <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca4a0' }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por código o email…"
+            style={{ paddingLeft: 36 }}
+          />
+        </div>
+        <span style={{ fontSize: '0.8125rem', color: '#9ca4a0' }}>{filtered.length} resultado(s)</span>
+      </div>
+
+      {/* Table */}
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Estado pedido</th>
+              <th>Estado pago</th>
+              <th>Total</th>
+              <th>Dirección entrega</th>
+              <th>Cambiar estado</th>
+              <th style={{ textAlign: 'right' }}>Ver</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><td colSpan={7} className="state">Sin pedidos con ese filtro</td></tr>
+            ) : (
+              filtered.map((order) => (
+                <tr key={order.id}>
+                  <td><span className="font-mono" style={{ fontWeight: 800, fontSize: '0.875rem' }}>{order.order_code}</span></td>
+                  <td><OrderStatusBadge status={order.status} /></td>
+                  <td><PaymentStatusBadge status={order.payment_status} /></td>
+                  <td style={{ fontWeight: 700 }}>{COP(order.total)}</td>
+                  <td style={{ fontSize: '0.8125rem', color: '#677067', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {order.delivery_city || '—'}
+                  </td>
+                  <td>
+                    <select
+                      value={order.status}
+                      onChange={(e) => updateStatus(order, e.target.value)}
+                      style={{ width: 'auto', fontSize: '0.8125rem', padding: '0.4rem 0.6rem' }}
+                    >
+                      {NEXT_STATUSES.map((s) => (
+                        <option key={s} value={s}>{s.replace('_', ' ')}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button className="btn btn-ghost btn-sm btn-icon" onClick={() => setSelected(order)} title="Ver detalle">
+                      <Eye size={15} />
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Detail modal */}
+      <Modal
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        title={`Pedido ${selected?.order_code}`}
+        size="lg"
+        footer={
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <label style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+              Estado:
+              <select
+                value={selected?.status}
+                onChange={(e) => updateStatus(selected, e.target.value)}
+                style={{ width: 'auto', fontWeight: 700 }}
+              >
+                {NEXT_STATUSES.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+              </select>
+            </label>
+            <button className="btn btn-secondary" onClick={() => setSelected(null)}>Cerrar</button>
+          </div>
+        }
+      >
+        {selected && (
+          <div style={{ display: 'grid', gap: '1.25rem' }}>
+            {/* Summary */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '0.75rem' }}>
+              {[
+                ['Subtotal', COP(selected.subtotal)],
+                ['Adicionales', COP(selected.additional_costs)],
+                ['Descuento', COP(selected.discount)],
+                ['Total', COP(selected.total)],
+                ['Pago', selected.payment_status],
+                ['Estado', selected.status],
+              ].map(([k, v]) => (
+                <div key={k} style={{ background: '#f8f9f7', borderRadius: 10, padding: '0.75rem' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#9ca4a0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k}</div>
+                  <div style={{ fontWeight: 800, fontSize: '1rem', color: '#172026', marginTop: 2 }}>{v}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Delivery info */}
+            <div style={{ background: '#f8f9f7', borderRadius: 10, padding: '1rem' }}>
+              <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Datos de entrega</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem 1rem', fontSize: '0.875rem' }}>
+                <span><strong>Nombre:</strong> {selected.delivery_name}</span>
+                <span><strong>Ciudad:</strong> {selected.delivery_city}</span>
+                <span><strong>Dirección:</strong> {selected.delivery_address}</span>
+                <span><strong>Teléfono:</strong> {selected.contact_phone}</span>
+                <span><strong>Email:</strong> {selected.contact_email}</span>
+                <span><strong>Doc. facturación:</strong> {selected.billing_document}</span>
+              </div>
+            </div>
+
+            {/* Items */}
+            {selected.items?.length > 0 && (
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Artículos</div>
+                <table className="data-table" style={{ fontSize: '0.875rem' }}>
+                  <thead><tr><th>Producto</th><th>Variante</th><th>Cant.</th><th style={{textAlign:'right'}}>Total</th></tr></thead>
+                  <tbody>
+                    {selected.items.map((item) => (
+                      <tr key={item.id}>
+                        <td><strong>{item.product_name}</strong></td>
+                        <td style={{ color: '#677067' }}>{item.variant_description || '—'}</td>
+                        <td>{item.quantity}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 700 }}>{COP(item.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+    </AdminLayout>
   );
 }
-
