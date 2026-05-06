@@ -23,6 +23,11 @@ textarea {
   font: inherit;
 }
 
+:focus-visible {
+  outline: 3px solid #f4b942;
+  outline-offset: 2px;
+}
+
 .topbar {
   position: sticky;
   top: 0;
@@ -100,6 +105,11 @@ textarea {
   color: #fff;
   cursor: pointer;
   font-weight: 700;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .button-link,
