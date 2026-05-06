@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import api from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 
@@ -29,10 +29,12 @@ export default function OrderDetail() {
             <span>{item.variant_description}</span>
             <span>Cantidad {item.quantity}</span>
             <span>${Number(item.total).toLocaleString('es-CO')}</span>
+            {order.status === 'entregado' && order.payment_status === 'aprobado' && (
+              <Link className="ghost-link" to={`/resenas/${order.id}/${item.product_id}`}>Resenar</Link>
+            )}
           </article>
         ))}
       </section>
     </main>
   );
 }
-

@@ -5,9 +5,11 @@ import AdminOrders from './pages/AdminOrders';
 import AdminCatalog from './pages/AdminCatalog';
 import AdminFinance from './pages/AdminFinance';
 import AdminHome from './pages/AdminHome';
+import AdminSettings from './pages/AdminSettings';
 import Catalog from './pages/Catalog';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
+import CreateReview from './pages/CreateReview';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import MyOrders from './pages/MyOrders';
@@ -35,11 +37,14 @@ export default function App() {
             <Route path="/mis-pedidos" element={<MyOrders />} />
             <Route path="/pedidos/:id" element={<OrderDetail />} />
             <Route path="/notificaciones" element={<Notifications />} />
+            <Route path="/resenas/:orderId/:productId" element={<CreateReview />} />
           </Route>
           <Route element={<ProtectedRoute role="admin" />}>
             <Route path="/admin" element={<AdminHome />} />
             <Route path="/admin/catalogo" element={<AdminCatalog />} />
             <Route path="/admin/finanzas" element={<AdminFinance />} />
+            <Route path="/admin/configuracion" element={<AdminSettings />} />
+            <Route path="/admin/auditoria" element={<AdminSettings />} />
             <Route path="/admin/pedidos" element={<AdminOrders />} />
           </Route>
           <Route path="/catalogo" element={<Catalog />} />
