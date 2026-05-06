@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.cart import get_open_cart
-from app.api.dependencies import get_current_user, require_customer
+from app.api.dependencies import get_current_user, require_admin, require_customer
 from app.core.database import get_db
 from app.models import (
     Cart,
@@ -19,7 +19,7 @@ from app.models import (
     ProductVariant,
     User,
 )
-from app.schemas import CheckoutIn, OrderCreate, PaymentSimulateIn
+from app.schemas import ApiMessage, CheckoutIn, OrderCreate, OrderStatusUpdate, PaymentSimulateIn
 from app.services.audit_service import add_audit_log
 
 
@@ -262,4 +262,93 @@ def order_detail(order_id: int, current_user: User = Depends(get_current_user), 
         raise HTTPException(status_code=404, detail="Pedido no encontrado.")
     if current_user.role != "admin" and order.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="No puedes ver pedidos de otros usuarios.")
+    return serialize_order(order)
+
+
+@router.get("/notifications")
+def my_notifications(current_user: User = Depends(require_customer), db: Session = Depends(get_db)):
+    notifications = (
+        db.query(Notification)
+        .filter(Notification.user_id == current_user.id)
+        .order_by(Notification.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": notification.id,
+            "order_id": notification.order_id,
+            "title": notification.title,
+            "message": notification.message,
+            "read": notification.read,
+            "created_at": notification.created_at,
+        }
+        for notification in notifications
+    ]
+
+
+@router.put("/notifications/{notification_id}/read", response_model=ApiMessage)
+def mark_notification_read(
+    notification_id: int,
+    current_user: User = Depends(require_customer),
+    db: Session = Depends(get_db),
+):
+    notification = (
+        db.query(Notification)
+        .filter(Notification.id == notification_id, Notification.user_id == current_user.id)
+        .first()
+    )
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notificacion no encontrada.")
+    notification.read = True
+    db.commit()
+    return ApiMessage(message="Notificacion marcada como leida.")
+
+
+@router.get("/admin/orders")
+def admin_orders(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    orders = (
+        db.query(Order)
+        .options(joinedload(Order.items), joinedload(Order.payments))
+        .order_by(Order.created_at.desc())
+        .all()
+    )
+    return [serialize_order(order) for order in orders]
+
+
+@router.put("/admin/orders/{order_id}/status")
+def update_order_status(
+    order_id: int,
+    payload: OrderStatusUpdate,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    valid_statuses = {"pendiente_pago", "preparacion", "enviado", "entregado", "cancelado", "rechazado"}
+    if payload.status not in valid_statuses:
+        raise HTTPException(status_code=422, detail="Estado de pedido no valido.")
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+    if payload.status in {"preparacion", "enviado", "entregado"} and order.payment_status != "aprobado":
+        raise HTTPException(status_code=409, detail="Un pedido no puede avanzar sin pago aprobado.")
+    previous = {"status": order.status}
+    order.status = payload.status
+    db.add(
+        Notification(
+            user_id=order.user_id,
+            order_id=order.id,
+            title="Estado de pedido actualizado",
+            message=f"Tu pedido {order.order_code} ahora esta en estado {order.status}.",
+        )
+    )
+    add_audit_log(
+        db,
+        user_id=admin.id,
+        action="update_order_status",
+        entity="orders",
+        entity_id=order.id,
+        previous_value=previous,
+        new_value={"status": order.status},
+    )
+    db.commit()
+    db.refresh(order)
     return serialize_order(order)
