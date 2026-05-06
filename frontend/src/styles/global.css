@@ -86,6 +86,11 @@ textarea {
   gap: 0.7rem;
 }
 
+.nav-actions .primary-button {
+  width: auto;
+  margin: 0;
+}
+
 .button-link,
 .primary-button,
 .icon-button {
@@ -606,6 +611,29 @@ textarea {
   width: 100%;
   text-align: left;
   cursor: pointer;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.8rem;
+}
+
+.metric-card {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid #dce5da;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.metric-card span {
+  color: #5b676d;
+}
+
+.metric-card strong {
+  font-size: 1.45rem;
 }
 
 @media (max-width: 860px) {
