@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Eye } from 'lucide-react';
+import { Eye, Search, ShieldOff, ShieldCheck } from 'lucide-react';
 import api from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 import AdminLayout from '../components/AdminLayout';
@@ -16,9 +16,11 @@ export default function AdminCustomers() {
   const [selected, setSelected] = useState(null);
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [customers, setCustomers] = useState([]);
 
-  const { data: customers = [], loading, error } = useAsync(async () => {
+  const { loading, error } = useAsync(async () => {
     const { data } = await api.get('/admin/customers');
+    setCustomers(data);
     return data;
   }, []);
 
@@ -33,6 +35,17 @@ export default function AdminCustomers() {
       setOrders([]);
     } finally {
       setLoadingOrders(false);
+    }
+  };
+
+  const toggleStatus = async (customer, active) => {
+    try {
+      const { data } = await api.patch(`/admin/customers/${customer.id}/status?active=${active}`);
+      setCustomers((prev) => prev.map((c) => (c.id === customer.id ? { ...c, active: data.active } : c)));
+      if (selected?.id === customer.id) setSelected((s) => ({ ...s, active: data.active }));
+      toast(active ? 'Cliente activado.' : 'Cliente restringido.', 'success');
+    } catch (err) {
+      toast(err.response?.data?.detail || 'Error al actualizar estado.', 'error');
     }
   };
 
@@ -59,7 +72,6 @@ export default function AdminCustomers() {
         </div>
       </div>
 
-      {/* Search */}
       <div className="admin-search-bar">
         <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
           <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca4a0' }} />
@@ -73,7 +85,6 @@ export default function AdminCustomers() {
         <span style={{ fontSize: '0.8125rem', color: '#9ca4a0' }}>{filtered.length} resultado(s)</span>
       </div>
 
-      {/* Table */}
       <div className="table-wrap">
         <table className="data-table">
           <thead>
@@ -94,16 +105,10 @@ export default function AdminCustomers() {
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                       <div style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: '50%',
-                        background: 'var(--brand-50)',
-                        color: 'var(--brand-600)',
-                        display: 'grid',
-                        placeItems: 'center',
-                        fontWeight: 800,
-                        fontSize: '0.8125rem',
-                        flexShrink: 0,
+                        width: 34, height: 34, borderRadius: '50%',
+                        background: c.active ? 'var(--brand-50)' : 'var(--error-bg)',
+                        color: c.active ? 'var(--brand-600)' : 'var(--error-text)',
+                        display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '0.8125rem', flexShrink: 0,
                       }}>
                         {c.name.charAt(0).toUpperCase()}
                       </div>
@@ -112,11 +117,34 @@ export default function AdminCustomers() {
                   </td>
                   <td style={{ fontSize: '0.875rem', color: '#677067' }}>{c.email}</td>
                   <td style={{ fontSize: '0.875rem', color: '#677067' }}>{c.phone || '—'}</td>
-                  <td><Badge variant={c.active ? 'success' : 'neutral'}>{c.active ? 'Activo' : 'Inactivo'}</Badge></td>
+                  <td>
+                    <Badge variant={c.active ? 'success' : 'error'}>
+                      {c.active ? 'Activo' : 'Restringido'}
+                    </Badge>
+                  </td>
                   <td style={{ textAlign: 'right' }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => openCustomer(c)}>
-                      <Eye size={14} /> Ver pedidos
-                    </button>
+                    <div className="table-actions" style={{ justifyContent: 'flex-end' }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => openCustomer(c)} title="Ver pedidos">
+                        <Eye size={14} /> Ver pedidos
+                      </button>
+                      {c.active ? (
+                        <button
+                          className="btn btn-danger btn-sm btn-icon"
+                          onClick={() => toggleStatus(c, false)}
+                          title="Restringir cliente"
+                        >
+                          <ShieldOff size={14} />
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-secondary btn-sm btn-icon"
+                          onClick={() => toggleStatus(c, true)}
+                          title="Activar cliente"
+                        >
+                          <ShieldCheck size={14} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -125,22 +153,35 @@ export default function AdminCustomers() {
         </table>
       </div>
 
-      {/* Customer detail modal */}
       <Modal
         open={!!selected}
         onClose={() => { setSelected(null); setOrders([]); }}
         title={selected?.name}
         size="lg"
-        footer={<button className="btn btn-secondary" onClick={() => { setSelected(null); setOrders([]); }}>Cerrar</button>}
+        footer={
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            {selected && (
+              selected.active ? (
+                <button className="btn btn-danger btn-sm" onClick={() => toggleStatus(selected, false)}>
+                  <ShieldOff size={14} /> Restringir
+                </button>
+              ) : (
+                <button className="btn btn-secondary btn-sm" onClick={() => toggleStatus(selected, true)}>
+                  <ShieldCheck size={14} /> Activar
+                </button>
+              )
+            )}
+            <button className="btn btn-secondary" onClick={() => { setSelected(null); setOrders([]); }}>Cerrar</button>
+          </div>
+        }
       >
         {selected && (
           <div style={{ display: 'grid', gap: '1.25rem' }}>
-            {/* Customer info */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
               {[
                 ['Email', selected.email],
                 ['Teléfono', selected.phone || '—'],
-                ['Estado', selected.active ? 'Activo' : 'Inactivo'],
+                ['Estado', <Badge key="s" variant={selected.active ? 'success' : 'error'}>{selected.active ? 'Activo' : 'Restringido'}</Badge>],
                 ['Pedidos', orders.length],
                 ['Ventas aprobadas', COP(totalRevenue)],
               ].map(([k, v]) => (
@@ -151,11 +192,8 @@ export default function AdminCustomers() {
               ))}
             </div>
 
-            {/* Orders */}
             <div>
-              <div style={{ fontWeight: 700, marginBottom: '0.75rem', fontSize: '0.9375rem' }}>
-                Historial de pedidos
-              </div>
+              <div style={{ fontWeight: 700, marginBottom: '0.75rem', fontSize: '0.9375rem' }}>Historial de pedidos</div>
               {loadingOrders ? (
                 <div className="state">Cargando pedidos...</div>
               ) : orders.length === 0 ? (

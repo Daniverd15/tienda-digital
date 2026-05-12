@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { AlertTriangle, Edit2, Package, Plus, Tag, Trash2, Warehouse } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, Edit2, ImagePlus, Package, Plus, Tag, Trash2, Warehouse } from 'lucide-react';
 import api from '../api/client';
 import AdminLayout from '../components/AdminLayout';
 import Modal from '../components/Modal';
@@ -26,6 +26,52 @@ const TABS = [
   { id: 'variants',   label: 'Variantes',    icon: <Package size={15} /> },
   { id: 'inventory',  label: 'Inventario',   icon: <Warehouse size={15} /> },
 ];
+
+function ImageUploader({ value, onChange, label = 'Imagen del producto' }) {
+  const inputRef = useRef();
+  const [drag, setDrag] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const upload = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const { data } = await api.post('/admin/upload-image', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      onChange(data.url);
+    } catch {
+      onChange('');
+    } finally { setUploading(false); }
+  };
+
+  return (
+    <label style={{ display: 'grid', gap: '0.3rem', fontSize: '0.8125rem', fontWeight: 700, color: 'var(--neutral-700)', margin: '0.6rem 0' }}>
+      {label}
+      <div
+        className={`img-upload-zone${drag ? ' drag-over' : ''}`}
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={(e) => { e.preventDefault(); setDrag(false); upload(e.dataTransfer.files[0]); }}
+      >
+        <input ref={inputRef} type="file" accept="image/*" onChange={(e) => upload(e.target.files[0])} />
+        {value ? (
+          <>
+            <img src={value.startsWith('/uploads/') ? `${import.meta.env.VITE_API_URL}${value}` : value} alt="preview" className="img-upload-preview" />
+            <span style={{ fontSize: '0.78rem', color: 'var(--neutral-500)' }}>Haz clic o arrastra para cambiar</span>
+          </>
+        ) : (
+          <div style={{ padding: '0.5rem', color: 'var(--neutral-400)' }}>
+            <ImagePlus size={28} style={{ margin: '0 auto 0.5rem' }} />
+            <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{uploading ? 'Subiendo…' : 'Haz clic o arrastra una imagen'}</div>
+            <div style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>JPG, PNG o WebP</div>
+          </div>
+        )}
+      </div>
+    </label>
+  );
+}
 
 export default function AdminCatalog() {
   const toast = useToast();
@@ -276,7 +322,7 @@ export default function AdminCatalog() {
             <label>Descripción corta * <input value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} required /></label>
             <label>Descripción larga <textarea value={productForm.long_description} onChange={(e) => setProductForm({ ...productForm, long_description: e.target.value })} /></label>
             <label>Precio base * <input type="number" min="0" step="0.01" value={productForm.base_price} onChange={(e) => setProductForm({ ...productForm, base_price: e.target.value })} required /></label>
-            <label>URL imagen <input type="url" value={productForm.image_url} onChange={(e) => setProductForm({ ...productForm, image_url: e.target.value })} /></label>
+            <ImageUploader value={productForm.image_url} onChange={(url) => setProductForm({ ...productForm, image_url: url })} />
             <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
               <label className="check-inline">
                 <input type="checkbox" checked={productForm.published} onChange={(e) => setProductForm({ ...productForm, published: e.target.checked })} />
@@ -354,7 +400,10 @@ export default function AdminCatalog() {
                 {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </label>
-            <label>SKU * <input value={variantForm.sku} onChange={(e) => setVariantForm({ ...variantForm, sku: e.target.value })} required /></label>
+            <label>
+              SKU
+              <input value={variantForm.sku} placeholder="Se genera automáticamente si se deja vacío" onChange={(e) => setVariantForm({ ...variantForm, sku: e.target.value })} />
+            </label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
               <label>Color <input value={variantForm.color} onChange={(e) => setVariantForm({ ...variantForm, color: e.target.value })} /></label>
               <label>Talla <input value={variantForm.size} onChange={(e) => setVariantForm({ ...variantForm, size: e.target.value })} /></label>

@@ -141,12 +141,20 @@ export default function AdminFinance() {
 
   const openReport = async (format) => {
     try {
-      const { data: rData } = await api.get(`/admin/reports/export/${format}`, {
-        responseType: format === 'csv' ? 'blob' : 'text',
-      });
-      const blob = format === 'csv' ? rData : new Blob([rData], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank', 'noopener,noreferrer');
+      if (format === 'csv') {
+        const { data: blob } = await api.get('/admin/reports/export/csv', { responseType: 'blob' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'reporte_financiero.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const { data: html } = await api.get('/admin/reports/export/pdf', { responseType: 'text' });
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+      }
     } catch {
       toast('Error al generar el reporte.', 'error');
     }

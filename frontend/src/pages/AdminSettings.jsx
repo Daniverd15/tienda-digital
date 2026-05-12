@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Megaphone, Settings, Trash2, Plus } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ImagePlus, Megaphone, Palette, Phone, Settings, ShoppingBag, Trash2, Plus } from 'lucide-react';
 import api from '../api/client';
 import AdminLayout from '../components/AdminLayout';
 import Badge from '../components/Badge';
@@ -8,22 +8,61 @@ import { useToast } from '../context/ToastContext';
 
 const emptyMessage = { title: '', content: '', type: 'info', active: true, start_date: '', end_date: '' };
 
-const SETTINGS_LABELS = {
-  commercial_name: 'Nombre comercial',
-  contact_email:   'Email de contacto',
-  contact_phone:   'Teléfono de contacto',
-  currency:        'Moneda',
-  logo_url:        'URL del logo',
-  banner_url:      'URL del banner',
-  primary_color:   'Color primario',
-  secondary_color: 'Color secundario',
-  stock_threshold: 'Umbral de stock mínimo',
-};
-
 const TABS = [
-  { id: 'store',    label: 'Tienda',             icon: <Settings size={15} /> },
+  { id: 'store',    label: 'Tienda',               icon: <Settings size={15} /> },
   { id: 'messages', label: 'Mensajes informativos', icon: <Megaphone size={15} /> },
 ];
+
+function ImageUploader({ value, onChange, label }) {
+  const inputRef = useRef();
+  const [drag, setDrag] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+  const upload = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const { data } = await api.post('/admin/upload-image', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      onChange(data.url);
+    } catch {
+      onChange('');
+    } finally { setUploading(false); }
+  };
+
+  const previewSrc = value
+    ? (value.startsWith('/uploads/') ? `${apiBase}${value}` : value)
+    : null;
+
+  return (
+    <label style={{ display: 'grid', gap: '0.3rem', fontSize: '0.8125rem', fontWeight: 700, color: 'var(--neutral-700)', margin: '0.6rem 0' }}>
+      {label}
+      <div
+        className={`img-upload-zone${drag ? ' drag-over' : ''}`}
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={(e) => { e.preventDefault(); setDrag(false); upload(e.dataTransfer.files[0]); }}
+      >
+        <input ref={inputRef} type="file" accept="image/*" onChange={(e) => upload(e.target.files[0])} />
+        {previewSrc ? (
+          <>
+            <img src={previewSrc} alt="preview" className="img-upload-preview" />
+            <span style={{ fontSize: '0.78rem', color: 'var(--neutral-500)' }}>Haz clic o arrastra para cambiar</span>
+          </>
+        ) : (
+          <div style={{ padding: '0.5rem', color: 'var(--neutral-400)' }}>
+            <ImagePlus size={24} style={{ margin: '0 auto 0.4rem' }} />
+            <div style={{ fontWeight: 600, fontSize: '0.8125rem' }}>{uploading ? 'Subiendo…' : 'Haz clic o arrastra'}</div>
+            <div style={{ fontSize: '0.72rem', marginTop: '0.2rem' }}>JPG, PNG o WebP</div>
+          </div>
+        )}
+      </div>
+    </label>
+  );
+}
 
 export default function AdminSettings() {
   const toast = useToast();
@@ -51,7 +90,18 @@ export default function AdminSettings() {
     try {
       const { data } = await api.put('/admin/settings', settings);
       setSettings(data);
-      toast('Configuración guardada.', 'success');
+      // Apply colors immediately
+      if (data.primary_color) {
+        document.documentElement.style.setProperty('--brand-500', data.primary_color);
+        document.documentElement.style.setProperty('--brand-600', data.primary_color);
+        document.documentElement.style.setProperty('--brand-400', data.primary_color);
+        document.documentElement.style.setProperty('--brand-50', data.primary_color + '18');
+      }
+      if (data.secondary_color) {
+        document.documentElement.style.setProperty('--accent-500', data.secondary_color);
+        document.documentElement.style.setProperty('--accent-400', data.secondary_color);
+      }
+      toast('Configuración guardada y tema aplicado.', 'success');
     } catch (err) {
       toast(err.response?.data?.detail || 'Error al guardar configuración.', 'error');
     } finally { setSaving(false); }
@@ -82,7 +132,7 @@ export default function AdminSettings() {
 
   if (!settings) return <AdminLayout><div className="state">Cargando configuración...</div></AdminLayout>;
 
-  const skipFields = ['id', 'created_at', 'updated_at'];
+  const set = (field, value) => setSettings({ ...settings, [field]: value });
 
   return (
     <AdminLayout>
@@ -101,72 +151,111 @@ export default function AdminSettings() {
         ))}
       </div>
 
-      {/* Store settings */}
+      {/* ── Store settings ── */}
       {tab === 'store' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '1.5rem', alignItems: 'start' }}>
-          <form onSubmit={saveSettings}>
+        <form onSubmit={saveSettings}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', alignItems: 'start' }}>
+
+            {/* Identidad visual */}
             <div className="section-card">
               <div className="section-card-header">
-                <span className="section-card-title">Datos generales de la tienda</span>
+                <Palette size={15} />
+                <span className="section-card-title">Identidad visual</span>
               </div>
               <div className="section-card-body" style={{ display: 'grid', gap: '0.1rem' }}>
-                {Object.keys(settings).filter((k) => !skipFields.includes(k)).map((field) => (
-                  <label key={field}>
-                    {SETTINGS_LABELS[field] || field.replace(/_/g, ' ')}
-                    <input
-                      type={field === 'stock_threshold' ? 'number' : field.includes('color') ? 'color' : 'text'}
-                      value={settings[field] ?? ''}
-                      onChange={(e) => setSettings({
-                        ...settings,
-                        [field]: field === 'stock_threshold' ? Number(e.target.value) : e.target.value,
-                      })}
-                      required={!['logo_url', 'banner_url'].includes(field)}
-                    />
+                <label>
+                  Nombre comercial *
+                  <input value={settings.commercial_name} onChange={(e) => set('commercial_name', e.target.value)} required />
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <label>
+                    Color primario
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <input type="color" value={settings.primary_color} onChange={(e) => set('primary_color', e.target.value)} style={{ width: 44, height: 36, padding: '2px', cursor: 'pointer', flex: 'none' }} />
+                      <input value={settings.primary_color} onChange={(e) => set('primary_color', e.target.value)} style={{ flex: 1 }} />
+                    </div>
                   </label>
-                ))}
-                <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={saving}>
-                  {saving ? 'Guardando...' : 'Guardar configuración'}
-                </button>
-              </div>
-            </div>
-          </form>
-
-          {/* Preview panel */}
-          <div>
-            <div className="section-card">
-              <div className="section-card-header"><span className="section-card-title">Vista previa</span></div>
-              <div className="section-card-body">
-                <div style={{
-                  background: settings.primary_color || '#1f7a5c',
-                  color: '#fff',
-                  borderRadius: 12,
-                  padding: '1.5rem',
-                  marginBottom: '1rem',
-                }}>
-                  <div style={{ fontWeight: 800, fontSize: '1.25rem' }}>{settings.commercial_name || 'Tienda'}</div>
-                  <div style={{ fontSize: '0.875rem', opacity: 0.8, marginTop: 4 }}>{settings.contact_email}</div>
+                  <label>
+                    Color secundario
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <input type="color" value={settings.secondary_color} onChange={(e) => set('secondary_color', e.target.value)} style={{ width: 44, height: 36, padding: '2px', cursor: 'pointer', flex: 'none' }} />
+                      <input value={settings.secondary_color} onChange={(e) => set('secondary_color', e.target.value)} style={{ flex: 1 }} />
+                    </div>
+                  </label>
                 </div>
-                <div style={{ fontSize: '0.8125rem', color: '#677067', display: 'grid', gap: '0.4rem' }}>
-                  <div><strong>Moneda:</strong> {settings.currency}</div>
-                  <div><strong>Stock mínimo:</strong> {settings.stock_threshold} unidades</div>
-                  <div><strong>Teléfono:</strong> {settings.contact_phone}</div>
-                </div>
+                <ImageUploader
+                  label="Logo de la tienda"
+                  value={settings.logo_url}
+                  onChange={(url) => set('logo_url', url)}
+                />
+                <ImageUploader
+                  label="Banner principal"
+                  value={settings.banner_url}
+                  onChange={(url) => set('banner_url', url)}
+                />
               </div>
             </div>
 
-            {settings.logo_url && (
-              <div className="section-card" style={{ marginTop: '1rem' }}>
-                <div className="section-card-header"><span className="section-card-title">Logo actual</span></div>
+            {/* Contacto + Comercio + Preview */}
+            <div style={{ display: 'grid', gap: '1.25rem' }}>
+              <div className="section-card">
+                <div className="section-card-header">
+                  <Phone size={15} />
+                  <span className="section-card-title">Contacto y datos</span>
+                </div>
+                <div className="section-card-body" style={{ display: 'grid', gap: '0.1rem' }}>
+                  <label>Email de contacto * <input type="email" value={settings.contact_email} onChange={(e) => set('contact_email', e.target.value)} required /></label>
+                  <label>Teléfono * <input value={settings.contact_phone} onChange={(e) => set('contact_phone', e.target.value)} required /></label>
+                  <label>Moneda * <input value={settings.currency} onChange={(e) => set('currency', e.target.value)} required /></label>
+                </div>
+              </div>
+
+              <div className="section-card">
+                <div className="section-card-header">
+                  <ShoppingBag size={15} />
+                  <span className="section-card-title">Inventario</span>
+                </div>
                 <div className="section-card-body">
-                  <img src={settings.logo_url} alt="Logo" style={{ maxWidth: '100%', maxHeight: 80, objectFit: 'contain' }} />
+                  <label>
+                    Umbral de stock mínimo *
+                    <input type="number" min="1" value={settings.stock_threshold} onChange={(e) => set('stock_threshold', Number(e.target.value))} required />
+                  </label>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--neutral-400)', margin: 0 }}>
+                    Se mostrará alerta cuando el stock de una variante caiga por debajo de este valor.
+                  </p>
                 </div>
               </div>
-            )}
+
+              {/* Vista previa */}
+              <div className="section-card">
+                <div className="section-card-header"><span className="section-card-title">Vista previa del tema</span></div>
+                <div className="section-card-body">
+                  <div style={{ background: settings.primary_color || '#1f7a5c', color: '#fff', borderRadius: 10, padding: '1.25rem', marginBottom: '0.75rem' }}>
+                    <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{settings.commercial_name || 'Tienda'}</div>
+                    <div style={{ fontSize: '0.8125rem', opacity: 0.8, marginTop: 2 }}>{settings.contact_email}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                    <div style={{ flex: 1, height: 32, borderRadius: 8, background: settings.primary_color }} title="Color primario" />
+                    <div style={{ flex: 1, height: 32, borderRadius: 8, background: settings.secondary_color }} title="Color secundario" />
+                  </div>
+                  <div style={{ fontSize: '0.8125rem', color: '#677067' }}>
+                    <div><strong>Moneda:</strong> {settings.currency}</div>
+                    <div><strong>Stock mínimo:</strong> {settings.stock_threshold} uds</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+
+          <div style={{ marginTop: '1.5rem' }}>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? 'Guardando…' : 'Guardar configuración'}
+            </button>
+          </div>
+        </form>
       )}
 
-      {/* Messages */}
+      {/* ── Messages ── */}
       {tab === 'messages' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
@@ -212,7 +301,6 @@ export default function AdminSettings() {
         </div>
       )}
 
-      {/* Create message modal */}
       <Modal
         open={msgModal}
         onClose={() => setMsgModal(false)}

@@ -1,5 +1,7 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import AdminAudit from './pages/AdminAudit';
@@ -8,6 +10,7 @@ import AdminCustomers from './pages/AdminCustomers';
 import AdminFinance from './pages/AdminFinance';
 import AdminHome from './pages/AdminHome';
 import AdminOrders from './pages/AdminOrders';
+import AdminReviews from './pages/AdminReviews';
 import AdminSettings from './pages/AdminSettings';
 import Catalog from './pages/Catalog';
 import Cart from './pages/Cart';
@@ -22,12 +25,38 @@ import PaymentResult from './pages/PaymentResult';
 import ProductDetail from './pages/ProductDetail';
 import Register from './pages/Register';
 import ProtectedRoute from './routes/ProtectedRoute';
+import api from './api/client';
+
+function StoreThemeProvider() {
+  useEffect(() => {
+    api.get('/store/settings').then(({ data }) => {
+      if (data.primary_color) {
+        document.documentElement.style.setProperty('--brand-500', data.primary_color);
+        document.documentElement.style.setProperty('--brand-600', data.primary_color);
+        document.documentElement.style.setProperty('--brand-400', data.primary_color);
+        document.documentElement.style.setProperty('--brand-50', data.primary_color + '18');
+      }
+      if (data.secondary_color) {
+        document.documentElement.style.setProperty('--accent-500', data.secondary_color);
+        document.documentElement.style.setProperty('--accent-400', data.secondary_color);
+      }
+    }).catch(() => {});
+  }, []);
+  return null;
+}
+
+function FooterWrapper() {
+  const { pathname } = useLocation();
+  if (pathname.startsWith('/admin')) return null;
+  return <Footer />;
+}
 
 export default function App() {
   return (
     <BrowserRouter>
       <ToastProvider>
         <AuthProvider>
+          <StoreThemeProvider />
           <Navbar />
           <Routes>
             {/* Public */}
@@ -56,11 +85,13 @@ export default function App() {
               <Route path="/admin/catalogo"         element={<AdminCatalog />} />
               <Route path="/admin/finanzas"         element={<AdminFinance />} />
               <Route path="/admin/configuracion"    element={<AdminSettings />} />
+              <Route path="/admin/resenas"          element={<AdminReviews />} />
               <Route path="/admin/auditoria"        element={<AdminAudit />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          <FooterWrapper />
         </AuthProvider>
       </ToastProvider>
     </BrowserRouter>

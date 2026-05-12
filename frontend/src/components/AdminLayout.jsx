@@ -4,15 +4,18 @@ import {
   ChevronRight,
   ClipboardList,
   Cog,
-  FileText,
   LayoutDashboard,
   LogOut,
+  MessageSquare,
   Package,
   ShoppingBag,
+  Star,
   Users,
 } from 'lucide-react';
-import { NavLink, Link } from 'react-router-dom';
+import { NavLink, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useAsync } from '../hooks/useAsync';
+import api from '../api/client';
 
 const NAV = [
   {
@@ -39,13 +42,33 @@ const NAV = [
     label: 'Config',
     items: [
       { to: '/admin/configuracion', icon: <Cog size={16} />,          label: 'Configuración' },
+      { to: '/admin/resenas',       icon: <Star size={16} />,          label: 'Reseñas' },
       { to: '/admin/auditoria',     icon: <BookOpen size={16} />,      label: 'Bitácora' },
     ],
   },
 ];
 
+const PAGE_TITLES = {
+  '/admin':                   'Dashboard',
+  '/admin/pedidos':           'Pedidos',
+  '/admin/clientes':          'Clientes',
+  '/admin/catalogo':          'Catálogo e inventario',
+  '/admin/finanzas':          'Finanzas',
+  '/admin/configuracion':     'Configuración',
+  '/admin/resenas':           'Reseñas',
+  '/admin/auditoria':         'Bitácora de auditoría',
+};
+
 export default function AdminLayout({ children }) {
   const { user, logout } = useAuth();
+  const { pathname } = useLocation();
+
+  const { data: settings } = useAsync(() =>
+    api.get('/store/settings').then((r) => r.data).catch(() => null), []
+  );
+
+  const storeName = settings?.commercial_name || 'Distrito Urbano';
+  const pageTitle = PAGE_TITLES[pathname] || 'Admin';
 
   const initials = user?.name
     ? user.name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()
@@ -55,6 +78,11 @@ export default function AdminLayout({ children }) {
     <div className="admin-shell">
       {/* Sidebar */}
       <aside className="admin-sidebar">
+        <Link to="/admin" className="sidebar-brand">
+          <div className="sidebar-brand-mark">DU</div>
+          <span className="sidebar-brand-name">{storeName}</span>
+        </Link>
+
         {NAV.map((group) => (
           <div className="sidebar-section" key={group.label}>
             <div className="sidebar-label">{group.label}</div>
@@ -95,9 +123,31 @@ export default function AdminLayout({ children }) {
         </div>
       </aside>
 
-      {/* Main */}
-      <div className="admin-content">
-        {children}
+      {/* Main area */}
+      <div className="admin-main">
+        {/* Top header */}
+        <header className="admin-topbar-bar">
+          <span className="admin-topbar-title">{pageTitle}</span>
+          <div className="admin-topbar-right">
+            <span style={{ fontSize: '0.8125rem', color: 'var(--neutral-500)' }}>
+              {user?.name}
+            </span>
+            <div className="sidebar-user-avatar" style={{ width: 30, height: 30, fontSize: '0.7rem', background: 'var(--brand-500)' }}>
+              {initials}
+            </div>
+          </div>
+        </header>
+
+        {/* Page content */}
+        <div className="admin-content">
+          {children}
+        </div>
+
+        {/* Footer */}
+        <footer className="admin-footer-bar">
+          <span>© {new Date().getFullYear()} {storeName} — Panel Administrativo</span>
+          <span>Ingeniería de Software · Scrum</span>
+        </footer>
       </div>
     </div>
   );

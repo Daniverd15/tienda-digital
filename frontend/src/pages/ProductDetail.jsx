@@ -113,21 +113,90 @@ export default function ProductDetail() {
           <h1>{product.name}</h1>
           <StarRating rating={product.average_rating} count={product.reviews_count} />
           <p>{product.long_description || product.description}</p>
-          <strong className="detail-price">${Number(product.base_price).toLocaleString('es-CO')}</strong>
+          {!variantId && (
+            <strong className="detail-price">${Number(product.base_price).toLocaleString('es-CO')}</strong>
+          )}
 
-          {/* Variant picker */}
-          <label>
-            Variante
-            <select value={variantId} onChange={(e) => { setVariantId(e.target.value); setQuantity(1); }} required>
-              <option value="">Selecciona talla / color / SKU</option>
-              {product.variants.map((v) => (
-                <option key={v.id} value={v.id} disabled={v.stock <= 0}>
-                  {[v.size, v.color, v.custom_attribute].filter(Boolean).join(' · ')} — {v.sku}
-                  {v.stock <= 0 ? ' (agotado)' : ` (${v.stock} disponibles)`}
-                </option>
-              ))}
-            </select>
-          </label>
+          {/* Variant picker — estilo Nike */}
+          {product.variants.length > 0 && (() => {
+            const hasSizes  = product.variants.some((v) => v.size);
+            const hasColors = product.variants.some((v) => v.color);
+            const selectedV = product.variants.find((v) => String(v.id) === String(variantId));
+
+            return (
+              <div style={{ marginBottom: '0.75rem' }}>
+                {selectedV && (
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                    <strong style={{ fontSize: '1.5rem', color: 'var(--neutral-900)' }}>
+                      ${Number(selectedV.price).toLocaleString('es-CO')}
+                    </strong>
+                    {selectedV.price !== product.base_price && (
+                      <span style={{ fontSize: '0.875rem', color: 'var(--neutral-400)', textDecoration: 'line-through' }}>
+                        ${Number(product.base_price).toLocaleString('es-CO')}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {hasColors && (
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--neutral-700)', marginBottom: '0.4rem' }}>
+                      Color{selectedV?.color ? `: ${selectedV.color}` : ''}
+                    </div>
+                    <div className="color-grid">
+                      {product.variants.filter((v) => !hasSizes || !variantId || v.color).map((v) => (
+                        <button
+                          key={v.id}
+                          title={v.color}
+                          disabled={v.stock <= 0}
+                          className={`color-swatch${String(v.id) === String(variantId) ? ' selected' : ''}`}
+                          style={{
+                            background: v.color?.startsWith('#') ? v.color : v.color || '#ccc',
+                            opacity: v.stock <= 0 ? 0.35 : 1,
+                          }}
+                          onClick={() => { setVariantId(String(v.id)); setQuantity(1); }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {hasSizes && (
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--neutral-700)', marginBottom: '0.4rem' }}>
+                      Talla{selectedV?.size ? `: ${selectedV.size}` : ' — selecciona una'}
+                    </div>
+                    <div className="size-grid">
+                      {product.variants.map((v) => (
+                        <button
+                          key={v.id}
+                          disabled={v.stock <= 0}
+                          className={`size-btn${String(v.id) === String(variantId) ? ' selected' : ''}`}
+                          onClick={() => { setVariantId(String(v.id)); setQuantity(1); }}
+                        >
+                          {v.size || v.custom_attribute || v.sku}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!hasSizes && !hasColors && (
+                  <label>
+                    Variante
+                    <select value={variantId} onChange={(e) => { setVariantId(e.target.value); setQuantity(1); }}>
+                      <option value="">Selecciona variante</option>
+                      {product.variants.map((v) => (
+                        <option key={v.id} value={v.id} disabled={v.stock <= 0}>
+                          {v.sku}{v.stock <= 0 ? ' (agotado)' : ` (${v.stock} uds)`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+            );
+          })()}
 
           {selectedVariant && (
             <>
