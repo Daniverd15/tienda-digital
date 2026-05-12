@@ -103,6 +103,35 @@ def delete_message(message_id: int, admin: User = Depends(require_admin), db: Se
     return ApiMessage(message="Mensaje desactivado.")
 
 
+@router.get("/admin/reviews")
+def admin_reviews(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    reviews = db.query(Review).order_by(Review.id.desc()).all()
+    return [
+        {
+            "id": r.id,
+            "product_id": r.product_id,
+            "order_id": r.order_id,
+            "user_id": r.user_id,
+            "rating": r.rating,
+            "comment": r.comment,
+            "approved": r.approved,
+            "created_at": r.created_at,
+        }
+        for r in reviews
+    ]
+
+
+@router.patch("/admin/reviews/{review_id}")
+def update_review_status(review_id: int, approved: bool, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    review = db.query(Review).filter(Review.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Reseña no encontrada.")
+    review.approved = approved
+    add_audit_log(db, user_id=admin.id, action="update_review_approval", entity="reviews", entity_id=review.id, new_value={"approved": approved})
+    db.commit()
+    return {"id": review.id, "approved": review.approved}
+
+
 @router.get("/admin/audit-logs")
 def audit_logs(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(200).all()

@@ -85,6 +85,18 @@ def customers(admin: User = Depends(require_admin), db: Session = Depends(get_db
     return [{"id": user.id, "name": user.name, "email": user.email, "phone": user.phone, "active": user.active} for user in users]
 
 
+@router.patch("/customers/{customer_id}/status")
+def update_customer_status(customer_id: int, active: bool, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    customer = db.query(User).filter(User.id == customer_id, User.role == "customer").first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado.")
+    previous = {"active": customer.active}
+    customer.active = active
+    add_audit_log(db, user_id=admin.id, action="update_customer_status", entity="users", entity_id=customer.id, previous_value=previous, new_value={"active": active})
+    db.commit()
+    return {"id": customer.id, "name": customer.name, "email": customer.email, "phone": customer.phone, "active": customer.active}
+
+
 @router.get("/customers/{customer_id}/orders")
 def customer_orders(customer_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     orders = db.query(Order).options(joinedload(Order.items), joinedload(Order.payments)).filter(Order.user_id == customer_id).all()
@@ -209,14 +221,46 @@ def export_csv(admin: User = Depends(require_admin), db: Session = Depends(get_d
 @router.get("/reports/export/pdf")
 def export_pdf(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     summary = finance_summary(db)
-    rows = "".join(f"<tr><td>{key}</td><td>{value}</td></tr>" for key, value in summary.items() if key != "productos_mas_vendidos")
-    html = f"""
-    <html><head><title>Reporte financiero</title></head>
-    <body>
-      <h1>Reporte financiero imprimible</h1>
-      <p>Alternativa local documentada para exportacion PDF: usar imprimir como PDF del navegador.</p>
-      <table border="1" cellpadding="8">{rows}</table>
-    </body></html>
-    """
+    top = "".join(
+        f"<tr><td style='padding:8px 12px;border-bottom:1px solid #e5e7eb'><strong>#{i+1}</strong> {p['product_name']}</td>"
+        f"<td style='padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right'>{p['quantity']} uds</td></tr>"
+        for i, p in enumerate(summary.get("productos_mas_vendidos", []))
+    )
+    labels = {
+        "ventas_brutas": "Ventas brutas", "cogs": "COGS", "costos_operativos": "Costos operativos",
+        "nomina": "Nómina", "utilidad_neta": "Utilidad neta", "rotacion_inventario": "Rotación inventario",
+        "ordenes_aprobadas": "Órdenes aprobadas",
+    }
+    rows = "".join(
+        f"<tr><td style='padding:10px 16px;border-bottom:1px solid #e5e7eb'>{labels.get(k, k)}</td>"
+        f"<td style='padding:10px 16px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700'>{v}</td></tr>"
+        for k, v in summary.items() if k != "productos_mas_vendidos"
+    )
+    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Reporte Financiero — Distrito Urbano</title>
+  <style>
+    body{{font-family:system-ui,sans-serif;margin:0;padding:2rem;color:#172026;background:#fff}}
+    h1{{font-size:1.5rem;margin-bottom:0.25rem}}
+    .subtitle{{color:#677067;font-size:0.875rem;margin-bottom:2rem}}
+    table{{width:100%;border-collapse:collapse;margin-bottom:2rem}}
+    th{{background:#f8f9f7;padding:10px 16px;text-align:left;font-size:0.75rem;letter-spacing:.05em;text-transform:uppercase;color:#677067;border-bottom:2px solid #e1e5de}}
+    @media print{{.no-print{{display:none}}}}
+  </style>
+</head>
+<body>
+  <h1>Reporte Financiero</h1>
+  <div class="subtitle">Distrito Urbano — generado el {__import__('datetime').date.today()}</div>
+  <button class="no-print" onclick="window.print()" style="margin-bottom:1.5rem;padding:.6rem 1.2rem;background:#1f7a5c;color:#fff;border:none;border-radius:8px;font-size:.875rem;font-weight:700;cursor:pointer">
+    Descargar PDF
+  </button>
+  <table><thead><tr><th>Indicador</th><th style="text-align:right">Valor</th></tr></thead><tbody>{rows}</tbody></table>
+  <h2 style="font-size:1rem;margin-bottom:.75rem">Productos más vendidos</h2>
+  <table><thead><tr><th>Producto</th><th style="text-align:right">Unidades</th></tr></thead><tbody>{top}</tbody></table>
+  <script>window.addEventListener('load',function(){{window.print();}})</script>
+</body>
+</html>"""
     return Response(content=html, media_type="text/html")
 

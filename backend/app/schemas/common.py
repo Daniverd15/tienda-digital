@@ -65,7 +65,7 @@ class ProductIn(BaseModel):
 
 
 class VariantIn(BaseModel):
-    sku: str
+    sku: Optional[str] = None
     color: Optional[str] = None
     size: Optional[str] = None
     custom_attribute: Optional[str] = None

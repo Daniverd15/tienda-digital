@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+import uuid
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.catalog import serialize_category, serialize_product
@@ -8,6 +11,8 @@ from app.models import Category, InventoryMovement, Product, ProductVariant, Sto
 from app.schemas import ApiMessage, CategoryIn, InventoryMovementIn, ProductIn, VariantIn
 from app.services.audit_service import add_audit_log
 
+UPLOADS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 router = APIRouter(prefix="/admin", tags=["Administracion catalogo"])
 
@@ -26,6 +31,22 @@ def serialize_variant(variant: ProductVariant) -> dict:
         "reserved_stock": variant.reserved_stock,
         "active": variant.active,
     }
+
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+
+
+@router.post("/upload-image")
+async def upload_image(file: UploadFile = File(...), admin: User = Depends(require_admin)):
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Tipo de archivo no permitido. Usa JPG, PNG o WebP.")
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "jpg"
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    dest = os.path.join(UPLOADS_DIR, filename)
+    content = await file.read()
+    with open(dest, "wb") as f:
+        f.write(content)
+    return {"url": f"/uploads/{filename}"}
 
 
 @router.get("/categories")
@@ -140,7 +161,15 @@ def product_variants(product_id: int, admin: User = Depends(require_admin), db: 
 def create_variant(product_id: int, payload: VariantIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     if not db.query(Product).filter(Product.id == product_id).first():
         raise HTTPException(status_code=404, detail="Producto no encontrado.")
-    variant = ProductVariant(product_id=product_id, **payload.model_dump())
+    data = payload.model_dump()
+    if not data.get("sku"):
+        parts = [
+            (data.get("color") or "")[:3].upper(),
+            (data.get("size") or "")[:3].upper(),
+            uuid.uuid4().hex[:6].upper(),
+        ]
+        data["sku"] = f"P{product_id}-" + "-".join(p for p in parts if p)
+    variant = ProductVariant(product_id=product_id, **data)
     db.add(variant)
     db.flush()
     add_audit_log(db, user_id=admin.id, action="create_variant", entity="product_variants", entity_id=variant.id, new_value=payload.model_dump())
