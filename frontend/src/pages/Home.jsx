@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Package, ShieldCheck, Star, Truck, Zap } from 'lucide-react';
 import api from '../api/client';
 import ProductCard from '../components/ProductCard';
-import Footer from '../components/Footer';
 import { useAsync } from '../hooks/useAsync';
 
 const FEATURES = [
@@ -177,8 +176,6 @@ export default function Home() {
           Crear cuenta gratis <ArrowRight size={18} />
         </Link>
       </section>
-
-      <Footer />
     </>
   );
 }
