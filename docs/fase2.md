@@ -9,7 +9,7 @@ de microservicios planteada en el informe de Fase 1 (MVP de 5 servicios).
 |---|---|---|---|---|
 | 1 | Scaffolding + infra (gateway, MySQL multi-schema, Redis, Mailhog, payment-mock) | DONE | Tomas | `docker compose up` levanta todo; los 6 `/health/<svc>` responden 200 a traves del gateway |
 | 2 | Auth & Users Service completo + gateway con rewrites uniformes | DONE | Santiago / Tomas | Registro, login, refresh, logout, me, /users/me, /admin/me, /admin/customers, /admin/access-logs. Correo de bienvenida llega a Mailhog. Bitacora con correlation_id. |
-| 3 | Catalog Service completo | pendiente | Santiago | Catalogo publico contra `/api/catalog/*` |
+| 3 | Catalog Service completo + Cache-Aside Redis | DONE | Santiago | Endpoints publicos: /catalog (overview), /categories, /products, /products/{id}, /store/settings, /store/messages. Endpoints admin CRUD para categorias, productos, store, mensajes, rating. Cache TTL 60-300s con invalidacion al editar. Llamada REST a Inventory para enriquecer detalle. Seed: 3 categorias, 5 productos. Gateway con healthcheck via curl. |
 | 4 | Inventory Service completo | pendiente | Santiago | Stock + reservas con lock Redis |
 | 5 | Commerce Service completo | pendiente | Santiago | Carrito + checkout + pedidos orquestados |
 | 6 | Payment Service + Circuit Breaker | pendiente | Santiago | Pagos simulados con CB |

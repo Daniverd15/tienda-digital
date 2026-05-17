@@ -128,6 +128,7 @@ services:
       DATABASE_URL: mysql+pymysql://catalog_user:catalog_pass@mysql:3306/catalog_db?charset=utf8mb4
       JWT_SECRET: cambiar_en_produccion_pero_compartido_entre_servicios
       REDIS_URL: redis://redis:6379/0
+      INVENTORY_SERVICE_URL: http://inventory-service:8003
     ports:
       - "8002:8002"
     depends_on:
