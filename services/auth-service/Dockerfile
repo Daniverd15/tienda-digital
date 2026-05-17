@@ -10,6 +10,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY app ./app
+COPY tests ./tests
 
 # Usuario no-root (Conformity Monkey: contenedor sin permisos elevados)
 RUN useradd --create-home --shell /bin/bash appuser \
