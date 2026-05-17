@@ -5,10 +5,15 @@ venv/
 __pycache__/
 *.pyc
 
-# Backend
+# Backend (monolito legacy + microservicios)
 backend/.pytest_cache/
 backend/htmlcov/
 backend/.coverage
+services/**/.pytest_cache/
+services/**/htmlcov/
+services/**/.coverage
+services/**/.env
+payment-mock/.env
 
 # Frontend
 frontend/node_modules/
