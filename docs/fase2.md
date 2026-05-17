@@ -8,7 +8,7 @@ de microservicios planteada en el informe de Fase 1 (MVP de 5 servicios).
 | # | Bloque | Estado | Autor | Resultado validado |
 |---|---|---|---|---|
 | 1 | Scaffolding + infra (gateway, MySQL multi-schema, Redis, Mailhog, payment-mock) | DONE | Tomas | `docker compose up` levanta todo; los 6 `/health/<svc>` responden 200 a traves del gateway |
-| 2 | Auth & Users Service completo | pendiente | Santiago | Login y registro contra `/api/auth/*` |
+| 2 | Auth & Users Service completo + gateway con rewrites uniformes | DONE | Santiago / Tomas | Registro, login, refresh, logout, me, /users/me, /admin/me, /admin/customers, /admin/access-logs. Correo de bienvenida llega a Mailhog. Bitacora con correlation_id. |
 | 3 | Catalog Service completo | pendiente | Santiago | Catalogo publico contra `/api/catalog/*` |
 | 4 | Inventory Service completo | pendiente | Santiago | Stock + reservas con lock Redis |
 | 5 | Commerce Service completo | pendiente | Santiago | Carrito + checkout + pedidos orquestados |
@@ -95,6 +95,45 @@ curl -X POST http://localhost:9000/charge \
 # Detener
 docker compose down
 ```
+
+## Bloque 2 - Auth Service: validacion E2E
+
+```bash
+# Login admin (seed)
+curl -X POST http://localhost/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@tienda.com","password":"Admin1234*"}'
+# -> {access_token, refresh_token, user{role: admin}}
+
+# Registro cliente
+curl -X POST http://localhost/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Cliente Demo","email":"demo@cliente.com","phone":"3001112233","password":"Cliente1234*"}'
+# -> 201 + tokens + correo de bienvenida en Mailhog (http://localhost:8025)
+
+# Detalle de usuario actual
+curl http://localhost/api/auth/me -H "Authorization: Bearer <access_token>"
+
+# Refresh (rota el refresh; el viejo queda revocado)
+curl -X POST http://localhost/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token":"<refresh>"}'
+
+# Listar clientes (solo admin)
+curl http://localhost/api/admin/customers -H "Authorization: Bearer <admin_access_token>"
+
+# Bitacora de accesos (login, register, refresh, login_failed)
+curl http://localhost/api/admin/access-logs -H "Authorization: Bearer <admin_access_token>"
+```
+
+Casos de error validados:
+- 401 sin token
+- 401 con credenciales invalidas
+- 403 con token de customer pidiendo recurso admin
+- 422 con contrasena debil
+
+Credenciales seed por defecto:
+- admin@tienda.com / Admin1234*
 
 ## Puertos asignados
 
