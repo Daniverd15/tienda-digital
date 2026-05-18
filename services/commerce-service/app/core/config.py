@@ -11,6 +11,13 @@ class Settings(BaseSettings):
     jwt_secret: str = "cambiar_en_produccion_pero_compartido_entre_servicios"
     jwt_algorithm: str = "HS256"
     redis_url: str = "redis://redis:6379/0"
+    smtp_host: str = "mailhog"
+    smtp_port: int = 1025
+    smtp_from: str = "no-reply@tiendadigital.local"
+    catalog_service_url: str = "http://catalog-service:8002"
+    inventory_service_url: str = "http://inventory-service:8003"
+    payment_service_url: str = "http://payment-service:8005"
+    auth_service_url: str = "http://auth-service:8001"
 
 
 settings = Settings()
