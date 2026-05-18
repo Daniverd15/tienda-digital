@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core import cache
 from app.core.database import get_db
-from app.core.deps import require_admin
+from app.core.deps import get_current_user_claims, require_admin
 from app.models import (
     Category,
     InformativeMessage,
@@ -245,7 +245,7 @@ def admin_delete_image(
 def admin_update_rating(
     product_id: int,
     payload: RatingSummaryUpsert,
-    _: dict = Depends(require_admin),
+    _: dict = Depends(get_current_user_claims),  # Commerce lo llama con el JWT del usuario que reseno
     db: Session = Depends(get_db),
 ):
     if payload.product_id != product_id:
