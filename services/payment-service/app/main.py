@@ -7,6 +7,7 @@ checkout end-to-end (POST /payments contra mock).
 Bloque 6 (proximo): se le agrega Circuit Breaker basado en Redis,
 reintentos con backoff exponencial y endpoint de conciliacion.
 """
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -17,6 +18,8 @@ from sqlalchemy import text
 from app.api.payments import router as payments_router
 from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
+from app.services.gateway_client import provider_cb
+from app.services.reconciler import run_reconciler_forever
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
 logger = logging.getLogger("payment-service")
@@ -26,8 +29,18 @@ logger = logging.getLogger("payment-service")
 async def lifespan(app: FastAPI):
     logger.info("Inicializando %s ...", settings.service_name)
     Base.metadata.create_all(bind=engine)
-    logger.info("%s listo en puerto %s", settings.service_name, settings.service_port)
-    yield
+    # Worker async: cada 5 min reconcilia PENDING/FAILED
+    task = asyncio.create_task(run_reconciler_forever(interval_seconds=300))
+    logger.info("%s listo en puerto %s (CB %s)",
+                settings.service_name, settings.service_port, provider_cb.get_state().value)
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
