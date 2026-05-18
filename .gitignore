@@ -6,9 +6,9 @@ __pycache__/
 *.pyc
 
 # Backend (monolito legacy + microservicios)
-backend/.pytest_cache/
-backend/htmlcov/
-backend/.coverage
+backend_legacy_monolito/.pytest_cache/
+backend_legacy_monolito/htmlcov/
+backend_legacy_monolito/.coverage
 services/**/.pytest_cache/
 services/**/htmlcov/
 services/**/.coverage

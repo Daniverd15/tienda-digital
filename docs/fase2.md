@@ -15,7 +15,7 @@ de microservicios planteada en el informe de Fase 1 (MVP de 5 servicios).
 | 6 | Endurecer Payment con Circuit Breaker + reconciler | DONE | Santiago | CB Redis (threshold=5, open_ttl=60s, estados CLOSED/OPEN/HALF_OPEN); reintentos con backoff exponencial (250ms, 500ms, 1s) en errores transitorios; endpoints admin GET /api/payments/circuit/state, POST /api/payments/circuit/reset, POST /api/payments/{id}/reconcile; worker async cada 5 min reintenta PENDING/FAILED automaticamente. Chaos validado: 5 charges con monto .88 abren el CB; siguientes charges rechazados con 503 sin tocar pasarela; checkout completo con CB abierto degrada graceful a Order(PAGO_PENDIENTE) con stock reservado; reset admin restaura CLOSED. Tests CB: 4 PASS. |
 | 7 | Frontend apuntando al gateway | DONE | Daniel | VITE_API_URL -> http://localhost/api. Migracion de rutas: /orders/my -> /orders/mine; /products/search -> /products; /payments/simulate + /orders -> /checkout (SAGA en un solo paso); /admin/dashboard -> /admin/finance/summary (con adaptador inline); /admin/settings -> /admin/store/settings; /admin/customers/{id}/orders -> /admin/orders?user_id=; /admin/products/{id}/variants -> /admin/inventory/variants?product_id=; /admin/categories/{id}/archive -> DELETE /admin/categories/{id}; PUT /admin/orders/{id}/status -> PATCH con body {new_status}; PUT /notifications/{id}/read -> PATCH; /admin/reviews/{id}?approved -> PATCH approve / DELETE; /products/{id}/reviews -> /reviews/product/{id}. Badge.jsx soporta ambos vocabularios (microservicios MAYUSCULAS + monolito minusculas). PaymentResult.jsx ejecuta SAGA completa con offset de centavos para simular APPROVED/REJECTED/PENDING. Endpoints no migrados (/admin/upload-image, /admin/customers/{id}/status) degradan con stub. Reportes CSV/PDF generados en cliente desde finance/summary. Vite corre en :5173, CORS verificado, login y catalog responden 200. |
 | 8 | Pruebas E2E + experimentos de Chaos Engineering | DONE | Tomas | 5 scripts ejecutables en scripts/{e2e,chaos}/: flujo_completo (34 PASS, recorre los 5 microservicios), chaos_monkey_inventory (12 PASS, detiene Inventory y verifica que el sistema degrada sin crear PAID falsos), latency_monkey_payment (9 PASS, abre CB tras 5 fallos y degrada checkout a PAGO_PENDIENTE), conformity_monkey (51 PASS, verifica Database per Service real con GRANT aislado, USER no-root, healthchecks), security_monkey (27 PASS, 401/403 estrictos, rate limit en /auth/login, headers, no leaks de pedidos ajenos). Total: 133/133 verificaciones. Runbook completo en docs/chaos.md. |
-| 9 | Documentacion final | pendiente | Tomas | README + endpoints + chaos.md |
+| 9 | Documentacion final + retiro del monolito legacy | DONE | Tomas | README.md reescrito para microservicios-first (mapa de servicios, healthchecks, credenciales, ejecucion de chaos suite). docs/endpoints.md regenerado con los ~70 endpoints reales de los 5 servicios agrupados por bounded context. docs/arquitectura.md actualizado con diagrama Mermaid de los 5 microservicios + tabla de patrones aplicados + trazabilidad con secciones del informe Fase 1. docs/instalacion.md migrado a `docker compose up --build -d` + healthchecks + smoke E2E. Monolito legacy renombrado backend/ -> backend_legacy_monolito/ con `git mv` (preserva historia) y README interno explicando que es referencia historica fuera del flujo de ejecucion. .gitignore y docker-compose.yml ajustados al nuevo path. |
 
 ## Decisiones de migracion
 
@@ -134,6 +134,26 @@ Casos de error validados:
 
 Credenciales seed por defecto:
 - admin@tienda.com / Admin1234*
+
+## Cierre de Fase 2 - totales consolidados
+
+| Indicador | Valor |
+|---|---|
+| Bloques planeados | 9 |
+| Bloques DONE | 9 / 9 |
+| Microservicios productivos | 5 (Auth, Catalog, Inventory, Commerce, Payment) |
+| Contenedores en `docker compose ps` | 12 (5 servicios + gateway + mock + mysql + redis + mailhog + phpmyadmin + payment-mock) |
+| Esquemas MySQL aislados | 5 + 1 legacy |
+| Patrones implementados | API Gateway, SSO JWT, Database per Service, Cache-Aside, Distributed Lock, SAGA orquestada sincrona, Circuit Breaker, Retry con backoff, Reconciler async, Idempotencia |
+| Scripts E2E + Chaos | 5 (1 E2E + 4 experimentos del Simian Army) |
+| Verificaciones automatizadas | **133 / 133 PASS** |
+| Endpoints HTTP expuestos por el gateway | ~70 |
+| Frontend | Apunta a `http://localhost/api` (gateway), 0 cambios estructurales |
+
+Toda la migracion respeta los tres roles del equipo:
+- **Daniel** firmo el bloque 7 (frontend al gateway)
+- **Santiago** firmo los bloques 2-6 (backend de los 5 microservicios)
+- **Tomas** firmo los bloques 1, 8 y 9 (infra, chaos suite, documentacion final)
 
 ## Puertos asignados
 

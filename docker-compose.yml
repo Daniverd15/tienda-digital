@@ -6,9 +6,11 @@
 #  - Nivel 2: + payment-mock (incluido aqui para simular pasarela)
 #  - Nivel 3: + rabbitmq + prometheus + grafana (no incluidos aun)
 #
-# Coexistencia con el monolito legacy: el monolito de backend/ se sigue ejecutando
-# con `uvicorn backend.main:app --port 8000` directo en el host mientras los
-# microservicios maduran. Apunta al mismo MySQL (esquema tienda_digital).
+# Coexistencia con el monolito legacy: el monolito Fase 1 se preserva en
+# backend_legacy_monolito/ como referencia historica. NO se levanta con este
+# compose; para inspeccionarlo correrlo aisladamente en el host:
+#   cd backend_legacy_monolito && uvicorn main:app --port 8000
+# Apunta al esquema tienda_digital (el mismo MySQL).
 # =============================================================================
 
 services:
