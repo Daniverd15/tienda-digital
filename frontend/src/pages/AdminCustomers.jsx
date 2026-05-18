@@ -60,7 +60,6 @@ export default function AdminCustomers() {
     <AdminLayout>
       <div className="page-header">
         <div className="page-header-left">
-          <span className="page-eyebrow">Operación</span>
           <h1 className="page-title">Clientes</h1>
         </div>
         <div className="page-actions">

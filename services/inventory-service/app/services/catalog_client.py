@@ -28,3 +28,16 @@ def product_exists(product_id: int, timeout_s: float = 2.0) -> bool | None:
     except (httpx.TimeoutException, httpx.ConnectError) as exc:
         logger.warning("Catalog no disponible (%s); permitiendo creacion en modo degradado", exc)
         return None
+
+
+def get_product(product_id: int, timeout_s: float = 2.0) -> dict | None:
+    """Devuelve el producto publico de Catalog o None si no esta disponible."""
+    try:
+        with httpx.Client(timeout=timeout_s) as client:
+            r = client.get(f"{CATALOG_URL}/products/{product_id}")
+        if r.status_code == 200:
+            return r.json()
+        return None
+    except (httpx.TimeoutException, httpx.ConnectError) as exc:
+        logger.warning("Catalog no disponible para product_id=%s: %s", product_id, exc)
+        return None

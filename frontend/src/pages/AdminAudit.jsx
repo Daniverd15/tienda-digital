@@ -80,7 +80,6 @@ export default function AdminAudit() {
     <AdminLayout>
       <div className="page-header">
         <div className="page-header-left">
-          <span className="page-eyebrow">RNF-02</span>
           <h1 className="page-title">Bitácora de auditoría</h1>
         </div>
         <div className="page-actions">

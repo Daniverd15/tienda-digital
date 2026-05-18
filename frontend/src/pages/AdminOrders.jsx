@@ -7,9 +7,48 @@ import { OrderStatusBadge, PaymentStatusBadge } from '../components/Badge';
 import Modal from '../components/Modal';
 import { useToast } from '../context/ToastContext';
 
-const ALL_STATUSES = ['todos', 'pendiente_pago', 'preparacion', 'enviado', 'entregado', 'cancelado', 'rechazado'];
-const NEXT_STATUSES = ['pendiente_pago', 'preparacion', 'enviado', 'entregado', 'cancelado', 'rechazado'];
+const FILTERS = [
+  { id: 'todos',          label: 'Todos' },
+  { id: 'pagado',         label: 'pagado',          statuses: ['PAID'] },
+  { id: 'pendiente_pago', label: 'pendiente pago',  statuses: ['CREATED', 'AWAITING_PAYMENT', 'PAGO_PENDIENTE'] },
+  { id: 'preparacion',    label: 'preparacion',     statuses: ['EN_PREPARACION'] },
+  { id: 'enviado',        label: 'enviado',         statuses: ['ENVIADO'] },
+  { id: 'entregado',      label: 'entregado',       statuses: ['ENTREGADO'] },
+  { id: 'cancelado',      label: 'cancelado',       statuses: ['CANCELADA'] },
+  { id: 'rechazado',      label: 'rechazado',       statuses: ['PAGO_RECHAZADO'], paymentStatuses: ['REJECTED'] },
+  { id: 'sin_stock',      label: 'sin stock',       statuses: ['SIN_STOCK'] },
+];
+
+const STATUS_OPTIONS = {
+  PAID: ['EN_PREPARACION', 'CANCELADA'],
+  EN_PREPARACION: ['ENVIADO', 'CANCELADA'],
+  ENVIADO: ['ENTREGADO'],
+};
+
+const STATUS_LABELS = {
+  CREATED: 'creado',
+  AWAITING_PAYMENT: 'pendiente pago',
+  PAID: 'pagado',
+  PAGO_PENDIENTE: 'pago pendiente',
+  PAGO_RECHAZADO: 'pago rechazado',
+  SIN_STOCK: 'sin stock',
+  EN_PREPARACION: 'preparacion',
+  ENVIADO: 'enviado',
+  ENTREGADO: 'entregado',
+  CANCELADA: 'cancelado',
+};
+
 const COP = (v) => `$${Number(v || 0).toLocaleString('es-CO')}`;
+
+const labelStatus = (status) => STATUS_LABELS[status] || String(status || '').replace('_', ' ').toLowerCase();
+
+const matchesFilter = (order, filter) => {
+  if (filter.id === 'todos') return true;
+  return (filter.statuses || []).includes(order.status)
+    || (filter.paymentStatuses || []).includes(order.payment_status);
+};
+
+const transitionOptions = (status) => STATUS_OPTIONS[status] || [];
 
 export default function AdminOrders() {
   const toast = useToast();
@@ -22,28 +61,14 @@ export default function AdminOrders() {
     return data;
   }, []);
 
-  // Mapeo de valores legacy del monolito a los del Commerce Service
-  const STATUS_MAP = {
-    preparacion: 'EN_PREPARACION',
-    enviado:     'ENVIADO',
-    entregado:   'ENTREGADO',
-    cancelado:   'CANCELADA',
-    // si ya viene en mayusculas, pasa tal cual
-    EN_PREPARACION: 'EN_PREPARACION',
-    ENVIADO:        'ENVIADO',
-    ENTREGADO:      'ENTREGADO',
-    CANCELADA:      'CANCELADA',
-  };
-
   const updateStatus = async (order, status) => {
     try {
-      const new_status = STATUS_MAP[status] || status;
-      await api.patch(`/admin/orders/${order.id}/status`, { new_status });
+      await api.patch(`/admin/orders/${order.id}/status`, { new_status: status });
       // Recargamos el pedido completo desde el servidor
       const { data: refreshed } = await api.get(`/admin/orders/${order.id}`);
       setData(orders.map((o) => (o.id === order.id ? refreshed : o)));
       if (selected?.id === order.id) setSelected(refreshed);
-      toast(`Pedido actualizado a "${new_status}".`, 'success');
+      toast(`Pedido actualizado a "${labelStatus(status)}".`, 'success');
     } catch (err) {
       toast(err.response?.data?.detail || 'Error al actualizar estado.', 'error');
     }
@@ -53,13 +78,14 @@ export default function AdminOrders() {
   if (error)   return <AdminLayout><div className="state error">{error}</div></AdminLayout>;
 
   const filtered = orders.filter((o) => {
-    const matchStatus = statusFilter === 'todos' || o.status === statusFilter;
+    const filter = FILTERS.find((f) => f.id === statusFilter) || FILTERS[0];
+    const matchStatus = matchesFilter(o, filter);
     const matchSearch = !search || o.order_code.toLowerCase().includes(search.toLowerCase()) || (o.contact_email || '').toLowerCase().includes(search.toLowerCase());
     return matchStatus && matchSearch;
   });
 
-  const counts = ALL_STATUSES.reduce((acc, s) => {
-    acc[s] = s === 'todos' ? orders.length : orders.filter((o) => o.status === s).length;
+  const counts = FILTERS.reduce((acc, filter) => {
+    acc[filter.id] = orders.filter((o) => matchesFilter(o, filter)).length;
     return acc;
   }, {});
 
@@ -67,7 +93,6 @@ export default function AdminOrders() {
     <AdminLayout>
       <div className="page-header">
         <div className="page-header-left">
-          <span className="page-eyebrow">Operación</span>
           <h1 className="page-title">Gestión de pedidos</h1>
         </div>
         <div className="page-actions">
@@ -77,23 +102,23 @@ export default function AdminOrders() {
 
       {/* Status filter chips */}
       <div className="filter-row" style={{ marginBottom: '1rem' }}>
-        {ALL_STATUSES.map((s) => (
+        {FILTERS.map((filter) => (
           <button
-            key={s}
-            className={`filter-chip${statusFilter === s ? ' active' : ''}`}
-            onClick={() => setStatusFilter(s)}
+            key={filter.id}
+            className={`filter-chip${statusFilter === filter.id ? ' active' : ''}`}
+            onClick={() => setStatusFilter(filter.id)}
           >
-            {s === 'todos' ? 'Todos' : s.replace('_', ' ')}
-            {counts[s] > 0 && (
+            {filter.label}
+            {counts[filter.id] > 0 && (
               <span style={{
-                background: statusFilter === s ? 'rgba(255,255,255,0.3)' : 'var(--neutral-200)',
-                color: statusFilter === s ? '#fff' : 'var(--neutral-600)',
+                background: statusFilter === filter.id ? 'rgba(255,255,255,0.3)' : 'var(--neutral-200)',
+                color: statusFilter === filter.id ? '#fff' : 'var(--neutral-600)',
                 borderRadius: 99,
                 fontSize: '0.7rem',
                 padding: '0px 6px',
                 fontWeight: 800,
               }}>
-                {counts[s]}
+                {counts[filter.id]}
               </span>
             )}
           </button>
@@ -142,15 +167,20 @@ export default function AdminOrders() {
                     {order.delivery_city || '—'}
                   </td>
                   <td>
-                    <select
-                      value={order.status}
-                      onChange={(e) => updateStatus(order, e.target.value)}
-                      style={{ width: 'auto', fontSize: '0.8125rem', padding: '0.4rem 0.6rem' }}
-                    >
-                      {NEXT_STATUSES.map((s) => (
-                        <option key={s} value={s}>{s.replace('_', ' ')}</option>
-                      ))}
-                    </select>
+                    {transitionOptions(order.status).length > 0 ? (
+                      <select
+                        value={order.status}
+                        onChange={(e) => updateStatus(order, e.target.value)}
+                        style={{ width: 'auto', fontSize: '0.8125rem', padding: '0.4rem 0.6rem' }}
+                      >
+                        <option value={order.status}>{labelStatus(order.status)}</option>
+                        {transitionOptions(order.status).map((s) => (
+                          <option key={s} value={s}>{labelStatus(s)}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span style={{ color: 'var(--neutral-400)', fontSize: '0.8125rem' }}>Sin cambios</span>
+                    )}
                   </td>
                   <td style={{ textAlign: 'right' }}>
                     <button className="btn btn-ghost btn-sm btn-icon" onClick={() => setSelected(order)} title="Ver detalle">
@@ -174,13 +204,18 @@ export default function AdminOrders() {
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             <label style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: 8 }}>
               Estado:
-              <select
-                value={selected?.status}
-                onChange={(e) => updateStatus(selected, e.target.value)}
-                style={{ width: 'auto', fontWeight: 700 }}
-              >
-                {NEXT_STATUSES.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-              </select>
+              {selected && transitionOptions(selected.status).length > 0 ? (
+                <select
+                  value={selected.status}
+                  onChange={(e) => updateStatus(selected, e.target.value)}
+                  style={{ width: 'auto', fontWeight: 700 }}
+                >
+                  <option value={selected.status}>{labelStatus(selected.status)}</option>
+                  {transitionOptions(selected.status).map((s) => <option key={s} value={s}>{labelStatus(s)}</option>)}
+                </select>
+              ) : (
+                <span style={{ color: 'var(--neutral-500)' }}>{labelStatus(selected?.status)}</span>
+              )}
             </label>
             <button className="btn btn-secondary" onClick={() => setSelected(null)}>Cerrar</button>
           </div>

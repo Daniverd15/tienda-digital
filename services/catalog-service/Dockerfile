@@ -13,7 +13,8 @@ COPY app ./app
 COPY tests ./tests
 
 # Usuario no-root (Conformity Monkey: contenedor sin permisos elevados)
-RUN useradd --create-home --shell /bin/bash appuser \
+RUN mkdir -p /app/uploads \
+    && useradd --create-home --shell /bin/bash appuser \
     && chown -R appuser:appuser /app
 USER appuser
 

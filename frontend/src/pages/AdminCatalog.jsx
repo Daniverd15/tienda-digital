@@ -5,6 +5,7 @@ import AdminLayout from '../components/AdminLayout';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
 import { useToast } from '../context/ToastContext';
+import { assetUrl } from '../utils/assets';
 
 const emptyCategory = { name: '', description: '', active: true, archived: false };
 const emptyProduct = {
@@ -18,7 +19,7 @@ const emptyProduct = {
   image_url: '',
 };
 const emptyVariant = { sku: '', color: '', size: '', custom_attribute: '', cost: '', price: '', stock: 0, reserved_stock: 0, active: true };
-const emptyMovement = { variant_id: '', movement_type: 'entrada', quantity: 1, reason: '' };
+const emptyMovement = { variant_id: '', movement_type: 'entry', quantity: 1, reason: '' };
 
 const TABS = [
   { id: 'categories', label: 'Categorías',   icon: <Tag size={15} /> },
@@ -62,7 +63,7 @@ function ImageUploader({ value, onChange, label = 'Imagen del producto' }) {
         <input ref={inputRef} type="file" accept="image/*" onChange={(e) => upload(e.target.files[0])} />
         {value ? (
           <>
-            <img src={value.startsWith('/uploads/') ? `${import.meta.env.VITE_API_URL}${value}` : value} alt="preview" className="img-upload-preview" />
+            <img src={assetUrl(value)} alt="preview" className="img-upload-preview" />
             <span style={{ fontSize: '0.78rem', color: 'var(--neutral-500)' }}>Haz clic o arrastra para cambiar</span>
           </>
         ) : (
@@ -83,6 +84,7 @@ export default function AdminCatalog() {
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [variants, setVariants] = useState([]);
+  const [inventoryVariants, setInventoryVariants] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState('');
   const [categoryForm, setCategoryForm] = useState(emptyCategory);
@@ -94,14 +96,21 @@ export default function AdminCatalog() {
   const [confirmDelete, setConfirmDelete] = useState(null); // {type, id, name}
   const [loading, setLoading] = useState(false);
 
+  const enrichVariants = (rows, productRows = products) => rows.map((v) => {
+    const product = productRows.find((p) => Number(p.id) === Number(v.product_id));
+    return { ...v, product_name: product?.name || `Producto #${v.product_id}` };
+  });
+
   const load = async () => {
-    const [catR, prodR, alertR] = await Promise.all([
+    const [catR, prodR, variantR, alertR] = await Promise.all([
       api.get('/admin/categories'),
       api.get('/admin/products'),
+      api.get('/admin/inventory/variants'),
       api.get('/admin/inventory/alerts'),
     ]);
     setCategories(catR.data);
     setProducts(prodR.data);
+    setInventoryVariants(enrichVariants(variantR.data, prodR.data));
     setAlerts(alertR.data);
   };
 
@@ -109,7 +118,7 @@ export default function AdminCatalog() {
 
   useEffect(() => {
     if (!selectedProduct) return;
-    api.get(`/admin/inventory/variants?product_id=${selectedProduct}`).then(({ data }) => setVariants(data));
+    api.get(`/admin/inventory/variants?product_id=${selectedProduct}`).then(({ data }) => setVariants(enrichVariants(data)));
   }, [selectedProduct]);
 
   /* ── Categories ── */
@@ -185,9 +194,11 @@ export default function AdminCatalog() {
     e.preventDefault();
     setLoading(true);
     try {
+      const generatedSku = `P${selectedProduct}-${Date.now().toString(36).toUpperCase()}`;
       await api.post(`/admin/inventory/variants`, {
         product_id: Number(selectedProduct),
         ...variantForm,
+        sku: variantForm.sku.trim() || generatedSku,
         cost: Number(variantForm.cost),
         price: Number(variantForm.price),
         stock: Number(variantForm.stock),
@@ -195,7 +206,7 @@ export default function AdminCatalog() {
       toast('Variante creada.', 'success');
       setVariantForm(emptyVariant);
       const { data } = await api.get(`/admin/inventory/variants?product_id=${selectedProduct}`);
-      setVariants(data);
+      setVariants(enrichVariants(data));
       load();
     } catch (err) {
       toast(err.response?.data?.detail || 'Error al crear variante.', 'error');
@@ -214,20 +225,23 @@ export default function AdminCatalog() {
       });
       toast('Movimiento registrado.', 'success');
       setMovementForm(emptyMovement);
-      load();
+      await load();
+      if (selectedProduct) {
+        const { data } = await api.get(`/admin/inventory/variants?product_id=${selectedProduct}`);
+        setVariants(enrichVariants(data));
+      }
     } catch (err) {
       toast(err.response?.data?.detail || 'Error al registrar movimiento.', 'error');
     } finally { setLoading(false); }
   };
 
   /* ── Render helpers ── */
-  const allVariants = products.flatMap((p) => (p.variants || []).map((v) => ({ ...v, product_name: p.name })));
+  const allVariants = inventoryVariants;
 
   return (
     <AdminLayout>
       <div className="page-header">
         <div className="page-header-left">
-          <span className="page-eyebrow">RF-07</span>
           <h1 className="page-title">Catálogo e inventario</h1>
         </div>
       </div>
@@ -358,7 +372,7 @@ export default function AdminCatalog() {
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                         {prod.image_url ? (
-                          <img src={prod.image_url} alt={prod.name} style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover', border: '1px solid #e1e5de' }} />
+                          <img src={assetUrl(prod.image_url)} alt={prod.name} style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover', border: '1px solid #e1e5de' }} />
                         ) : (
                           <div style={{ width: 40, height: 40, borderRadius: 8, background: '#f0f2ee', display: 'grid', placeItems: 'center' }}><Package size={16} color="#9ca4a0" /></div>
                         )}
@@ -489,9 +503,9 @@ export default function AdminCatalog() {
               <label>
                 Tipo de movimiento
                 <select value={movementForm.movement_type} onChange={(e) => setMovementForm({ ...movementForm, movement_type: e.target.value })}>
-                  <option value="entrada">Entrada</option>
-                  <option value="salida">Salida</option>
-                  <option value="ajuste">Ajuste</option>
+                  <option value="entry">Entrada</option>
+                  <option value="exit">Salida</option>
+                  <option value="adjust">Ajuste</option>
                 </select>
               </label>
               <label>Cantidad * <input type="number" min="1" value={movementForm.quantity} onChange={(e) => setMovementForm({ ...movementForm, quantity: e.target.value })} required /></label>

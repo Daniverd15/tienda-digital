@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CreditCard, MapPin, User } from 'lucide-react';
+import { MapPin, User } from 'lucide-react';
 import api from '../api/client';
 import { useToast } from '../context/ToastContext';
 
@@ -11,8 +11,6 @@ const initialForm = {
   billing_document: '',
   contact_phone:    '',
   contact_email:    '',
-  discount:         0,
-  additional_costs: 0,
 };
 
 // En la arquitectura de microservicios, POST /api/checkout ejecuta TODA la
@@ -43,10 +41,8 @@ export default function Checkout() {
       return;
     }
     const subtotal = Number(cart.subtotal || 0);
-    const additional = Number(form.additional_costs || 0);
-    const discount = Number(form.discount || 0);
-    const total = Math.max(0, subtotal + additional - discount);
-    setSummary({ subtotal, additional_costs: additional, discount, total });
+    const total = Math.max(0, subtotal);
+    setSummary({ subtotal, additional_costs: 0, discount: 0, total });
     toast('Resumen calculado. Procede al pago.', 'success');
   };
 
@@ -108,21 +104,6 @@ export default function Checkout() {
               </div>
             </div>
 
-            {/* Extras */}
-            <div className="checkout-form-section">
-              <h3><CreditCard size={16} /> Ajustes de precio</h3>
-              <div className="fields">
-                <div className="fields-row">
-                  <label>Costos adicionales (COP)
-                    <input type="number" min="0" value={form.additional_costs} onChange={upd('additional_costs')} />
-                  </label>
-                  <label>Descuento (COP)
-                    <input type="number" min="0" value={form.discount} onChange={upd('discount')} />
-                  </label>
-                </div>
-              </div>
-            </div>
-
             <button type="submit" className="btn btn-primary btn-full btn-lg">
               Calcular total
             </button>
@@ -141,14 +122,6 @@ export default function Checkout() {
                   <span>Subtotal</span>
                   <span>${Number(summary.subtotal).toLocaleString('es-CO')}</span>
                 </div>
-                <div className="summary-row">
-                  <span>Costos adicionales</span>
-                  <span>${Number(summary.additional_costs).toLocaleString('es-CO')}</span>
-                </div>
-                <div className="summary-row">
-                  <span>Descuento</span>
-                  <span style={{ color: 'var(--brand-600)' }}>-${Number(summary.discount).toLocaleString('es-CO')}</span>
-                </div>
                 <div className="summary-row total">
                   <span>Total a pagar</span>
                   <span>${Number(summary.total).toLocaleString('es-CO')}</span>
@@ -157,7 +130,12 @@ export default function Checkout() {
                   type="button"
                   className="btn btn-primary btn-full btn-lg"
                   style={{ marginTop: '1.25rem' }}
-                  onClick={() => navigate('/pago', { state: { checkout: form, summary } })}
+                  onClick={() => navigate('/pago', {
+                    state: {
+                      checkout: { ...form, additional_costs: 0, discount: 0 },
+                      summary,
+                    },
+                  })}
                 >
                   Ir a pagar →
                 </button>

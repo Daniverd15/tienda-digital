@@ -141,6 +141,11 @@ class LowStockAlertPublic(BaseModel):
 
     id: int
     variant_id: int
+    product_id: int | None = None
+    product_name: str | None = None
+    sku: str | None = None
+    stock: int | None = None
+    available: int | None = None
     threshold: int
     stock_at_alert: int
     resolved: bool

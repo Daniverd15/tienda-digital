@@ -133,6 +133,8 @@ services:
       INVENTORY_SERVICE_URL: http://inventory-service:8003
     ports:
       - "8002:8002"
+    volumes:
+      - catalog_uploads:/app/uploads
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -237,6 +239,7 @@ services:
 # ---------------------------------------------------------------------------
 volumes:
   mysql_data:
+  catalog_uploads:
 
 networks:
   tienda_net:

@@ -3,6 +3,19 @@ import { Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react';
 import api from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 import { useToast } from '../context/ToastContext';
+import { assetUrl } from '../utils/assets';
+
+const money = (value) => {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? `$${amount.toLocaleString('es-CO')}` : '$0';
+};
+
+const lineTotal = (item) => item.total ?? Number(item.unit_price || 0) * Number(item.quantity || 0);
+
+const availableStock = (item) => {
+  const value = Number(item.available_stock);
+  return Number.isFinite(value) ? value : null;
+};
 
 export default function Cart() {
   const toast = useToast();
@@ -12,7 +25,12 @@ export default function Cart() {
   }, []);
 
   const updateQuantity = async (item, qty) => {
-    if (qty < 1 || qty > item.available_stock) return;
+    const stock = availableStock(item);
+    if (qty < 1) return;
+    if (stock !== null && qty > stock) {
+      toast(`Solo hay ${stock} unidad${stock !== 1 ? 'es' : ''} disponibles.`, 'warning');
+      return;
+    }
     try {
       const { data } = await api.put(`/cart/items/${item.id}`, { quantity: qty });
       setData(data);
@@ -36,6 +54,10 @@ export default function Cart() {
   if (error)   return <div className="state error">{error}</div>;
 
   const itemCount = cart.items.reduce((s, i) => s + i.quantity, 0);
+  const hasUnavailableItems = cart.items.some((item) => {
+    const stock = availableStock(item);
+    return item.has_enough_stock === false || (stock !== null && stock < item.quantity);
+  });
 
   return (
     <main className="page-shell">
@@ -59,16 +81,32 @@ export default function Cart() {
         <div className="cart-layout">
           {/* Items */}
           <section>
-            {cart.items.map((item) => (
+            {cart.items.map((item) => {
+              const stock = availableStock(item);
+              const hasEnoughStock = item.has_enough_stock !== false && (stock === null || stock >= item.quantity);
+              const stockLabel = stock === null
+                ? 'Stock no disponible'
+                : stock === 0
+                  ? 'Agotado'
+                  : `Stock disponible: ${stock}`;
+
+              return (
               <div key={item.id} className="cart-item">
                 <img
-                  src={item.image_url || 'https://images.unsplash.com/photo-1523381294911-8d3cead13475?w=200&q=80'}
+                    src={assetUrl(item.image_url) || 'https://images.unsplash.com/photo-1523381294911-8d3cead13475?w=200&q=80'}
                   alt={item.product_name}
                 />
                 <div className="cart-item-info">
                   <strong>{item.product_name}</strong>
                   <p>{item.variant_description} · SKU {item.sku}</p>
-                  <span>Stock disponible: {item.available_stock}</span>
+                  <span style={{ color: hasEnoughStock ? undefined : 'var(--error-text)' }}>
+                    {stockLabel}
+                  </span>
+                  {!hasEnoughStock && (
+                    <span style={{ display: 'block', color: 'var(--error-text)', fontWeight: 700 }}>
+                      Quita este articulo o reduce la cantidad para pagar.
+                    </span>
+                  )}
                 </div>
                 {/* Qty controls */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -83,13 +121,13 @@ export default function Cart() {
                   <button
                     className="btn btn-secondary btn-sm btn-icon"
                     onClick={() => updateQuantity(item, item.quantity + 1)}
-                    disabled={item.quantity >= item.available_stock}
+                    disabled={stock !== null && item.quantity >= stock}
                   >
                     <Plus size={13} />
                   </button>
                 </div>
                 <strong style={{ fontWeight: 800, fontSize: '1rem', whiteSpace: 'nowrap' }}>
-                  ${Number(item.total).toLocaleString('es-CO')}
+                  {money(lineTotal(item))}
                 </strong>
                 <button
                   className="btn btn-danger btn-sm btn-icon"
@@ -99,7 +137,8 @@ export default function Cart() {
                   <Trash2 size={14} />
                 </button>
               </div>
-            ))}
+              );
+            })}
           </section>
 
           {/* Summary */}
@@ -107,7 +146,7 @@ export default function Cart() {
             <h2>Resumen del pedido</h2>
             <div className="summary-row">
               <span>Subtotal ({itemCount} artículos)</span>
-              <span>${Number(cart.subtotal).toLocaleString('es-CO')}</span>
+              <span>{money(cart.subtotal)}</span>
             </div>
             <div className="summary-row">
               <span>Envío</span>
@@ -115,15 +154,26 @@ export default function Cart() {
             </div>
             <div className="summary-row total">
               <span>Subtotal</span>
-              <span>${Number(cart.subtotal).toLocaleString('es-CO')}</span>
+              <span>{money(cart.subtotal)}</span>
             </div>
-            <Link
-              to="/checkout"
-              className="btn btn-primary btn-full btn-lg"
-              style={{ marginTop: '1rem' }}
-            >
-              Continuar al pago
-            </Link>
+            {hasUnavailableItems && (
+              <div className="alert error" style={{ marginTop: '1rem', marginBottom: 0 }}>
+                Hay productos sin stock suficiente.
+              </div>
+            )}
+            {hasUnavailableItems ? (
+              <button className="btn btn-primary btn-full btn-lg" style={{ marginTop: '1rem' }} disabled>
+                Continuar al pago
+              </button>
+            ) : (
+              <Link
+                to="/checkout"
+                className="btn btn-primary btn-full btn-lg"
+                style={{ marginTop: '1rem' }}
+              >
+                Continuar al pago
+              </Link>
+            )}
             <Link to="/catalogo" className="ghost-link" style={{ display: 'flex', justifyContent: 'center', marginTop: '0.75rem', fontSize: '0.875rem' }}>
               ← Seguir comprando
             </Link>

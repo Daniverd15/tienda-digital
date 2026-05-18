@@ -72,7 +72,6 @@ export default function AdminReviews() {
     <AdminLayout>
       <div className="page-header">
         <div className="page-header-left">
-          <span className="page-eyebrow">RF-09</span>
           <h1 className="page-title">Gestión de reseñas</h1>
         </div>
         <div className="page-actions">

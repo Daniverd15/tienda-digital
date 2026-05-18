@@ -27,8 +27,12 @@ class CartItemPublic(BaseModel):
     product_name: str
     variant_description: str
     image_url: str | None
+    sku: str | None = None
     quantity: int
     unit_price: float
+    total: float
+    available_stock: int | None = None
+    has_enough_stock: bool = True
 
 
 class CartPublic(BaseModel):
@@ -52,8 +56,6 @@ class CheckoutRequest(BaseModel):
     billing_document: str = Field(min_length=4, max_length=80)
     contact_phone: str = Field(min_length=6, max_length=40)
     contact_email: EmailStr
-    additional_costs: float = Field(default=0, ge=0)
-    discount: float = Field(default=0, ge=0)
     card_token: str | None = Field(default=None, max_length=120)
 
 

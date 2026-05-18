@@ -5,9 +5,7 @@ import api from '../api/client';
 import { useToast } from '../context/ToastContext';
 
 // En arquitectura de microservicios, POST /api/checkout ejecuta la SAGA
-// completa (reserva + cobro + confirm/release). El monto define el resultado
-// del mock: total con .00 -> APPROVED, .77 -> REJECTED, .99 -> PENDING.
-// Aqui ajustamos los centavos sumando un pequeno offset a additional_costs.
+// completa (reserva + cobro + confirm/release).
 const RESULT_CONFIG = {
   APPROVED:  { icon: <CheckCircle size={36} />, title: '¡Pago aprobado!',   sub: 'Tu pedido fue creado y está en proceso.', variant: 'success' },
   REJECTED:  { icon: <XCircle    size={36} />, title: 'Pago rechazado',    sub: 'El pago no fue procesado. Intenta con otro método.', variant: 'error' },
@@ -15,16 +13,9 @@ const RESULT_CONFIG = {
   FAILED:    { icon: <XCircle    size={36} />, title: 'Pasarela no disponible', sub: 'No pudimos comunicarnos con la pasarela. El pedido queda pendiente.', variant: 'error' },
 };
 
-const OFFSETS = {
-  APPROVED: 0,
-  REJECTED: 0.77,
-  PENDING:  0.99,
-};
-
 export default function PaymentResult() {
   const { state } = useLocation();
   const toast = useToast();
-  const [simStatus, setSimStatus] = useState('APPROVED');
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -44,12 +35,10 @@ export default function PaymentResult() {
   const pay = async () => {
     setLoading(true);
     try {
-      const offset = OFFSETS[simStatus] || 0;
-      const adjusted = Number(state.checkout.additional_costs || 0) + offset;
       const { data } = await api.post('/checkout', {
         ...state.checkout,
-        additional_costs: adjusted,
-        discount: Number(state.checkout.discount || 0),
+        additional_costs: 0,
+        discount: 0,
       }, {
         headers: { 'Idempotency-Key': `${Date.now()}-${Math.random().toString(36).slice(2, 10)}` },
       });
@@ -112,56 +101,7 @@ export default function PaymentResult() {
           <ShoppingCart size={36} />
         </div>
         <h2>Pasarela de pago</h2>
-        <p>Elige el resultado a simular para este pago de <strong>${Number(state.summary.total).toLocaleString('es-CO')}</strong>.</p>
-
-        <div style={{
-          background: 'var(--neutral-50)',
-          border: '1px solid var(--neutral-200)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '1.25rem',
-          marginBottom: '1.5rem',
-          textAlign: 'left',
-        }}>
-          <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '0.75rem' }}>
-            Simular resultado de pago
-          </div>
-          <div style={{ display: 'grid', gap: '0.5rem' }}>
-            {[
-              { value: 'APPROVED', label: 'Pago aprobado',  desc: 'SAGA completa: reserva + cobro + confirm; orden PAID', color: 'var(--success-text)' },
-              { value: 'REJECTED', label: 'Pago rechazado', desc: 'Compensacion: stock liberado; orden PAGO_RECHAZADO',   color: 'var(--error-text)' },
-              { value: 'PENDING',  label: 'Pago pendiente', desc: 'La pasarela demora; orden PAGO_PENDIENTE',             color: 'var(--warning-text)' },
-            ].map((opt) => (
-              <label
-                key={opt.value}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  padding: '0.75rem',
-                  borderRadius: 'var(--radius-sm)',
-                  border: `1.5px solid ${simStatus === opt.value ? opt.color : 'var(--neutral-200)'}`,
-                  cursor: 'pointer',
-                  background: simStatus === opt.value ? `${opt.color}10` : '#fff',
-                  transition: 'all 150ms',
-                  margin: 0,
-                }}
-              >
-                <input
-                  type="radio"
-                  name="payment_status"
-                  value={opt.value}
-                  checked={simStatus === opt.value}
-                  onChange={(e) => setSimStatus(e.target.value)}
-                  style={{ width: 'auto', accentColor: opt.color }}
-                />
-                <div>
-                  <strong style={{ display: 'block', color: opt.color, fontSize: '0.875rem' }}>{opt.label}</strong>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--neutral-500)' }}>{opt.desc}</span>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
+        <p>Confirma el pago por <strong>${Number(state.summary.total).toLocaleString('es-CO')}</strong>.</p>
 
         <button
           className="btn btn-primary btn-full btn-lg"

@@ -25,17 +25,9 @@ import api from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 import AdminLayout from '../components/AdminLayout';
 import { OrderStatusBadge, PaymentStatusBadge } from '../components/Badge';
+import { buildOrderStatusData, buildTopProducts } from '../utils/analytics';
 
 const COP = (v) => `$${Number(v || 0).toLocaleString('es-CO')}`;
-
-const STATUS_COLORS = {
-  pendiente_pago: '#f59e0b',
-  preparacion:    '#3b82f6',
-  enviado:        '#8b5cf6',
-  entregado:      '#22c55e',
-  rechazado:      '#ef4444',
-  cancelado:      '#9ca3af',
-};
 
 function KpiCard({ icon, label, value, sub, color }) {
   return (
@@ -52,10 +44,12 @@ function KpiCard({ icon, label, value, sub, color }) {
 
 const CustomBarTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
+  const item = payload[0].payload;
   return (
     <div style={{ background: '#fff', border: '1px solid #e1e5de', borderRadius: 8, padding: '0.65rem 1rem', fontSize: '0.8125rem', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-      <strong style={{ display: 'block', marginBottom: 4, color: '#172026' }}>{payload[0].payload.product_name}</strong>
-      <span style={{ color: '#4c5960' }}>Vendidos: <strong style={{ color: '#1f7a5c' }}>{payload[0].value}</strong></span>
+      <strong style={{ display: 'block', marginBottom: 4, color: '#172026' }}>{item.product_name}</strong>
+      <div style={{ color: '#4c5960' }}>Unidades: <strong style={{ color: '#1f7a5c' }}>{item.quantity}</strong></div>
+      <div style={{ color: '#4c5960' }}>Ingresos: <strong style={{ color: '#1f7a5c' }}>{COP(item.revenue)}</strong></div>
     </div>
   );
 };
@@ -64,17 +58,13 @@ const CustomPieTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{ background: '#fff', border: '1px solid #e1e5de', borderRadius: 8, padding: '0.6rem 0.9rem', fontSize: '0.8125rem', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-      <strong>{payload[0].name}</strong>: {payload[0].value}
+      <strong>{payload[0].payload.label}</strong>: {payload[0].value}
     </div>
   );
 };
 
 export default function AdminHome() {
   const { data, loading, error } = useAsync(async () => {
-    // En microservicios sustituimos /admin/dashboard por /admin/finance/summary
-    // y completamos con defaults los campos detallados que no expone (cogs,
-    // productos mas vendidos, rotacion). Esto deja la UI consistente y degrada
-    // los KPI no calculados a 0 / arreglos vacios.
     const [summary, orders, alerts, customers] = await Promise.all([
       api.get('/admin/finance/summary'),
       api.get('/admin/orders'),
@@ -82,6 +72,7 @@ export default function AdminHome() {
       api.get('/admin/customers'),
     ]);
     const s = summary.data;
+    const orderRows = orders.data || [];
     const dash = {
       ventas_brutas:        s.gross_sales || 0,
       ordenes_aprobadas:    s.orders_count || 0,
@@ -90,14 +81,12 @@ export default function AdminHome() {
       nomina:               s.payroll || 0,
       utilidad_neta:        s.net_profit || 0,
       rotacion_inventario:  0,
-      pedidos_por_estado: Object.entries(
-        orders.data.reduce((acc, o) => ({ ...acc, [o.status]: (acc[o.status] || 0) + 1 }), {})
-      ).map(([estado, count]) => ({ estado, count })),
-      productos_mas_vendidos: [],
+      pedidos_por_estado:   buildOrderStatusData(orderRows),
+      productos_mas_vendidos: buildTopProducts(orderRows, 6),
     };
     return {
       dash,
-      orders: orders.data,
+      orders: orderRows,
       alerts: alerts.data,
       customerCount: customers.data.length,
     };
@@ -108,7 +97,6 @@ export default function AdminHome() {
       <AdminLayout>
         <div className="page-header">
           <div className="page-header-left">
-            <span className="page-eyebrow">Operación</span>
             <h1 className="page-title">Dashboard</h1>
           </div>
         </div>
@@ -133,7 +121,7 @@ export default function AdminHome() {
   }
 
   const { dash, orders, alerts, customerCount } = data;
-  const recentOrders = [...orders].reverse().slice(0, 6);
+  const recentOrders = orders.slice(0, 6);
   const pieData = (dash.pedidos_por_estado || []).filter((d) => d.count > 0);
   const barData = dash.productos_mas_vendidos || [];
 
@@ -141,7 +129,6 @@ export default function AdminHome() {
     <AdminLayout>
       <div className="page-header">
         <div className="page-header-left">
-          <span className="page-eyebrow">Operación</span>
           <h1 className="page-title">Dashboard</h1>
         </div>
         <div className="page-actions">
@@ -178,7 +165,7 @@ export default function AdminHome() {
           icon={<TrendingUp size={22} />}
           label="Utilidad neta"
           value={COP(dash.utilidad_neta)}
-          sub={`COGS + Op + Nómina descontados`}
+          sub="Ventas menos gastos y nomina"
           color={dash.utilidad_neta >= 0 ? 'green' : 'orange'}
         />
       </div>
@@ -230,7 +217,7 @@ export default function AdminHome() {
                 <Pie
                   data={pieData}
                   dataKey="count"
-                  nameKey="status"
+                  nameKey="label"
                   cx="50%"
                   cy="45%"
                   innerRadius={50}
@@ -238,7 +225,7 @@ export default function AdminHome() {
                   paddingAngle={3}
                 >
                   {pieData.map((entry, i) => (
-                    <Cell key={i} fill={STATUS_COLORS[entry.status] || '#9ca3af'} />
+                    <Cell key={i} fill={entry.fill || '#9ca3af'} />
                   ))}
                 </Pie>
                 <Tooltip content={<CustomPieTooltip />} />
@@ -258,10 +245,10 @@ export default function AdminHome() {
       {/* Finance summary row */}
       <div className="metric-grid" style={{ marginBottom: '1.5rem' }}>
         {[
-          ['COGS',              COP(dash.cogs)],
+          ['Pedidos con venta', dash.ordenes_aprobadas || 0],
           ['Costos operativos', COP(dash.costos_operativos)],
           ['Nómina',            COP(dash.nomina)],
-          ['Rotación inventario', `${dash.rotacion_inventario ?? 0} ×`],
+          ['Margen neto', dash.ventas_brutas > 0 ? `${((dash.utilidad_neta / dash.ventas_brutas) * 100).toFixed(1)}%` : 'Sin ventas'],
         ].map(([label, value]) => (
           <div key={label} className="metric-card">
             <span>{label}</span>

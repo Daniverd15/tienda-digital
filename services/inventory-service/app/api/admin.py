@@ -4,7 +4,7 @@ CRUD de variantes (con validacion contra Catalog), movimientos manuales y
 gestion de alertas de stock minimo.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
 from app.core.deps import get_correlation_id, require_admin
@@ -18,12 +18,54 @@ from app.schemas import (
     VariantAdminUpdate,
     VariantInternal,
 )
-from app.services.catalog_client import product_exists
+from app.services.catalog_client import get_product, product_exists
 from app.services.scheduler import expire_pending_reservations
 from app.services.serializers import serialize_movement, serialize_variant_internal
 
 
 router = APIRouter(prefix="/admin", tags=["Inventario administracion"])
+
+
+def _serialize_alert(alert: LowStockAlert, product_cache: dict[int, dict | None]) -> dict:
+    variant = alert.variant
+    product_id = variant.product_id if variant else None
+    product = None
+    if product_id is not None:
+        if product_id not in product_cache:
+            product_cache[product_id] = get_product(product_id)
+        product = product_cache[product_id]
+    return {
+        "id": alert.id,
+        "variant_id": alert.variant_id,
+        "product_id": product_id,
+        "product_name": (product or {}).get("name") or (f"Producto #{product_id}" if product_id else "Producto no disponible"),
+        "sku": variant.sku if variant else None,
+        "stock": variant.stock if variant else alert.stock_at_alert,
+        "available": variant.available if variant else None,
+        "threshold": alert.threshold,
+        "stock_at_alert": alert.stock_at_alert,
+        "resolved": alert.resolved,
+        "notes": alert.notes,
+        "created_at": alert.created_at,
+    }
+
+
+def _sync_low_stock_alert(db: Session, variant: ProductVariant, default_threshold: int = 5) -> None:
+    alert = (
+        db.query(LowStockAlert)
+        .filter(LowStockAlert.variant_id == variant.id, LowStockAlert.resolved.is_(False))
+        .first()
+    )
+    threshold = alert.threshold if alert else default_threshold
+    if alert and variant.stock > threshold:
+        alert.resolved = True
+    elif not alert and variant.stock <= threshold:
+        db.add(LowStockAlert(
+            variant_id=variant.id,
+            threshold=threshold,
+            stock_at_alert=variant.stock,
+            notes=f"Stock {variant.stock} <= umbral {threshold}",
+        ))
 
 
 # -----------------------------------------------------------------------------
@@ -152,6 +194,7 @@ def create_movement(
         v.stock -= payload.quantity
     elif payload.movement_type == "adjust":
         v.stock = max(0, v.stock + payload.quantity)
+    _sync_low_stock_alert(db, v)
 
     mv = StockMovement(
         variant_id=v.id,
@@ -178,10 +221,27 @@ def list_alerts(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    qry = db.query(LowStockAlert)
+    if not include_resolved:
+        open_alerts = (
+            db.query(LowStockAlert)
+            .options(joinedload(LowStockAlert.variant))
+            .filter(LowStockAlert.resolved.is_(False))
+            .all()
+        )
+        changed = False
+        for alert in open_alerts:
+            if alert.variant and alert.variant.stock > alert.threshold:
+                alert.resolved = True
+                changed = True
+        if changed:
+            db.commit()
+
+    qry = db.query(LowStockAlert).options(joinedload(LowStockAlert.variant))
     if not include_resolved:
         qry = qry.filter(LowStockAlert.resolved.is_(False))
-    return qry.order_by(LowStockAlert.id.desc()).all()
+    alerts = qry.order_by(LowStockAlert.id.desc()).all()
+    product_cache: dict[int, dict | None] = {}
+    return [_serialize_alert(a, product_cache) for a in alerts]
 
 
 @router.post("/alerts/scan", response_model=ApiMessage)

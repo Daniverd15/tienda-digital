@@ -29,11 +29,25 @@ def _get_or_create_cart(db: Session, user_id: int) -> Cart:
 
 
 def _serialize_cart(cart: Cart) -> dict:
-    items = [{
-        "id": i.id, "variant_id": i.variant_id, "product_id": i.product_id,
-        "product_name": i.product_name, "variant_description": i.variant_description,
-        "image_url": i.image_url, "quantity": i.quantity, "unit_price": float(i.unit_price),
-    } for i in cart.items]
+    items = []
+    for i in cart.items:
+        variant = inventory_get_variant(i.variant_id)
+        available_stock = None
+        is_active = False
+        if variant:
+            available_stock = int(variant.get("available", 0))
+            is_active = bool(variant.get("active", False))
+
+        unit_price = float(i.unit_price)
+        total = unit_price * i.quantity
+        items.append({
+            "id": i.id, "variant_id": i.variant_id, "product_id": i.product_id,
+            "product_name": i.product_name, "variant_description": i.variant_description,
+            "image_url": i.image_url, "quantity": i.quantity, "unit_price": unit_price,
+            "sku": variant.get("sku") if variant else None,
+            "total": total, "available_stock": available_stock,
+            "has_enough_stock": is_active and available_stock is not None and available_stock >= i.quantity,
+        })
     subtotal = sum(i["quantity"] * i["unit_price"] for i in items)
     return {
         "id": cart.id, "user_id": cart.user_id, "status": cart.status,

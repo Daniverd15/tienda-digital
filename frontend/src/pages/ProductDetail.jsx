@@ -5,6 +5,7 @@ import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useAsync } from '../hooks/useAsync';
 import { useToast } from '../context/ToastContext';
+import { assetUrl } from '../utils/assets';
 
 function StarRating({ rating, count }) {
   return (
@@ -22,6 +23,11 @@ function StarRating({ rating, count }) {
     </div>
   );
 }
+
+const variantStock = (variant) => {
+  const amount = Number(variant?.available ?? variant?.stock);
+  return Number.isFinite(amount) ? amount : 0;
+};
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -46,6 +52,7 @@ export default function ProductDetail() {
     () => data?.product?.variants.find((v) => String(v.id) === String(variantId)),
     [data, variantId],
   );
+  const selectedStock = variantStock(selectedVariant);
 
   if (loading) {
     return (
@@ -72,8 +79,8 @@ export default function ProductDetail() {
   const addToCart = async () => {
     if (!isAuthenticated) { navigate('/login'); return; }
     if (!selectedVariant) { toast('Selecciona una variante primero.', 'warning'); return; }
-    if (selectedVariant.stock < 1) { toast('Esta variante no tiene stock disponible.', 'error'); return; }
-    if (quantity > selectedVariant.stock) { toast('Cantidad mayor al stock disponible.', 'error'); return; }
+    if (selectedStock < 1) { toast('Esta variante no tiene stock disponible.', 'error'); return; }
+    if (quantity > selectedStock) { toast('Cantidad mayor al stock disponible.', 'error'); return; }
     setAdding(true);
     try {
       await api.post('/cart/items', { variant_id: selectedVariant.id, quantity });
@@ -90,7 +97,7 @@ export default function ProductDetail() {
         <section className="product-gallery">
           <img
             className="detail-image"
-            src={images[activeImg]?.image_url || images[0]?.image_url}
+            src={assetUrl(images[activeImg]?.image_url || images[0]?.image_url)}
             alt={images[activeImg]?.alt_text || product.name}
           />
           {images.length > 1 && (
@@ -98,7 +105,7 @@ export default function ProductDetail() {
               {images.map((img, i) => (
                 <img
                   key={img.id}
-                  src={img.image_url}
+                  src={assetUrl(img.image_url)}
                   alt={img.alt_text || product.name}
                   className={i === activeImg ? 'active' : ''}
                   onClick={() => setActiveImg(i)}
@@ -149,11 +156,11 @@ export default function ProductDetail() {
                         <button
                           key={v.id}
                           title={v.color}
-                          disabled={v.stock <= 0}
+                          disabled={variantStock(v) <= 0}
                           className={`color-swatch${String(v.id) === String(variantId) ? ' selected' : ''}`}
                           style={{
                             background: v.color?.startsWith('#') ? v.color : v.color || '#ccc',
-                            opacity: v.stock <= 0 ? 0.35 : 1,
+                            opacity: variantStock(v) <= 0 ? 0.35 : 1,
                           }}
                           onClick={() => { setVariantId(String(v.id)); setQuantity(1); }}
                         />
@@ -171,7 +178,7 @@ export default function ProductDetail() {
                       {product.variants.map((v) => (
                         <button
                           key={v.id}
-                          disabled={v.stock <= 0}
+                          disabled={variantStock(v) <= 0}
                           className={`size-btn${String(v.id) === String(variantId) ? ' selected' : ''}`}
                           onClick={() => { setVariantId(String(v.id)); setQuantity(1); }}
                         >
@@ -188,8 +195,8 @@ export default function ProductDetail() {
                     <select value={variantId} onChange={(e) => { setVariantId(e.target.value); setQuantity(1); }}>
                       <option value="">Selecciona variante</option>
                       {product.variants.map((v) => (
-                        <option key={v.id} value={v.id} disabled={v.stock <= 0}>
-                          {v.sku}{v.stock <= 0 ? ' (agotado)' : ` (${v.stock} uds)`}
+                        <option key={v.id} value={v.id} disabled={variantStock(v) <= 0}>
+                          {v.sku}{variantStock(v) <= 0 ? ' (agotado)' : ` (${variantStock(v)} uds)`}
                         </option>
                       ))}
                     </select>
@@ -206,17 +213,17 @@ export default function ProductDetail() {
                 <input
                   type="number"
                   min="1"
-                  max={selectedVariant.stock}
+                  max={selectedStock}
                   value={quantity}
-                  onChange={(e) => setQuantity(Math.max(1, Math.min(Number(e.target.value), selectedVariant.stock)))}
+                  onChange={(e) => setQuantity(Math.max(1, Math.min(Number(e.target.value), selectedStock)))}
                 />
               </label>
               <div
-                className={`alert ${selectedVariant.stock > 0 ? 'success' : 'error'}`}
+                className={`alert ${selectedStock > 0 ? 'success' : 'error'}`}
                 style={{ marginBottom: '0.75rem' }}
               >
-                {selectedVariant.stock > 0
-                  ? `✓ ${selectedVariant.stock} unidades disponibles para esta variante`
+                {selectedStock > 0
+                  ? `✓ ${selectedStock} unidades disponibles para esta variante`
                   : '✗ Variante sin stock — selecciona otra'}
               </div>
             </>
@@ -225,7 +232,7 @@ export default function ProductDetail() {
           <button
             className="btn btn-primary btn-full btn-lg"
             onClick={addToCart}
-            disabled={adding || (selectedVariant && selectedVariant.stock <= 0)}
+            disabled={adding || (selectedVariant && selectedStock <= 0)}
             style={{ gap: '0.6rem' }}
           >
             <ShoppingCart size={18} />

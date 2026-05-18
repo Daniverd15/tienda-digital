@@ -5,6 +5,7 @@ import AdminLayout from '../components/AdminLayout';
 import Badge from '../components/Badge';
 import Modal from '../components/Modal';
 import { useToast } from '../context/ToastContext';
+import { assetUrl } from '../utils/assets';
 
 const emptyMessage = { title: '', content: '', type: 'info', active: true, start_date: '', end_date: '' };
 
@@ -17,7 +18,6 @@ function ImageUploader({ value, onChange, label }) {
   const inputRef = useRef();
   const [drag, setDrag] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
   const upload = async (file) => {
     if (!file) return;
@@ -32,9 +32,7 @@ function ImageUploader({ value, onChange, label }) {
     } finally { setUploading(false); }
   };
 
-  const previewSrc = value
-    ? (value.startsWith('/uploads/') ? `${apiBase}${value}` : value)
-    : null;
+  const previewSrc = assetUrl(value) || null;
 
   return (
     <label style={{ display: 'grid', gap: '0.3rem', fontSize: '0.8125rem', fontWeight: 700, color: 'var(--neutral-700)', margin: '0.6rem 0' }}>
@@ -138,7 +136,6 @@ export default function AdminSettings() {
     <AdminLayout>
       <div className="page-header">
         <div className="page-header-left">
-          <span className="page-eyebrow">RF-09</span>
           <h1 className="page-title">Configuración</h1>
         </div>
       </div>

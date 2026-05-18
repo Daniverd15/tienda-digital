@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
 import { Package, Star } from 'lucide-react';
+import { assetUrl } from '../utils/assets';
 
 export default function ProductCard({ product }) {
-  const image = product.image_url || 'https://images.unsplash.com/photo-1523381294911-8d3cead13475?w=600&q=80';
+  const image = assetUrl(product.image_url) || 'https://images.unsplash.com/photo-1523381294911-8d3cead13475?w=600&q=80';
   const price = Number(product.base_price || 0).toLocaleString('es-CO');
   const inStock = (product.stock || 0) > 0;
 

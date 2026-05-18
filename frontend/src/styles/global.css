@@ -772,13 +772,6 @@ textarea { resize: vertical; min-height: 80px; }
   flex-wrap: wrap;
 }
 .page-header-left { display: flex; flex-direction: column; gap: 0.25rem; }
-.page-eyebrow {
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--brand-500);
-}
 .page-title {
   font-size: 1.75rem;
   font-weight: 800;

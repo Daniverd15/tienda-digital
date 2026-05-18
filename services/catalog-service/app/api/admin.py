@@ -4,8 +4,10 @@ Cada operacion de escritura invalida los prefijos de cache afectados, para
 mantener la consistencia eventual del Cache-Aside.
 """
 from datetime import date
+from pathlib import Path
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -43,9 +45,37 @@ from app.services.serializers import (
 
 router = APIRouter(prefix="/admin", tags=["Administracion catalogo"])
 
+UPLOAD_DIR = Path("/app/uploads")
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+
 
 def _invalidate_catalog_cache() -> None:
     cache.invalidate_prefix("catalog:")
+
+
+@router.post("/upload-image")
+async def admin_upload_image(
+    file: UploadFile = File(...),
+    _: dict = Depends(require_admin),
+):
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(422, "Formato no soportado. Usa JPG, PNG o WebP.")
+
+    content = await file.read(MAX_IMAGE_BYTES + 1)
+    await file.close()
+    if len(content) > MAX_IMAGE_BYTES:
+        raise HTTPException(413, "La imagen supera el maximo permitido de 5 MB.")
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"{uuid4().hex}{ALLOWED_IMAGE_TYPES[file.content_type]}"
+    path = UPLOAD_DIR / filename
+    path.write_bytes(content)
+    return {"url": f"/uploads/{filename}"}
 
 
 # -----------------------------------------------------------------------------

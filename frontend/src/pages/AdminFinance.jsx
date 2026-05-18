@@ -3,13 +3,19 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts';
-import { Plus, Download, Users, DollarSign, Edit2, Trash2, TrendingDown } from 'lucide-react';
+import { Plus, Download, Users, DollarSign, Edit2, Trash2, TrendingDown, ShoppingCart } from 'lucide-react';
 import api from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 import AdminLayout from '../components/AdminLayout';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
 import { useToast } from '../context/ToastContext';
+import {
+  buildExpenseBreakdown,
+  buildFinanceInsights,
+  buildOrderStatusData,
+  buildTopProducts,
+} from '../utils/analytics';
 
 const COP = (v) => `$${Number(v || 0).toLocaleString('es-CO')}`;
 
@@ -67,9 +73,7 @@ export default function AdminFinance() {
   const [expForm, setExpForm] = useState(emptyExpense);
   const [loading, setLoading] = useState(false);
 
-  // Mapeo: /admin/finance/summary (microservicios) -> formato dashboard del monolito.
-  // Los campos que no calcula el summary (cogs, productos top, rotacion) van a 0 / [].
-  const summaryToDash = (s) => ({
+  const summaryToDash = (s, orders = []) => ({
     ventas_brutas:        s.gross_sales || 0,
     ordenes_aprobadas:    s.orders_count || 0,
     cogs:                 0,
@@ -77,26 +81,30 @@ export default function AdminFinance() {
     nomina:               s.payroll || 0,
     utilidad_neta:        s.net_profit || 0,
     rotacion_inventario:  0,
-    pedidos_por_estado:   [],
-    productos_mas_vendidos: [],
+    pedidos_por_estado:   buildOrderStatusData(orders),
+    productos_mas_vendidos: buildTopProducts(orders, 6),
   });
 
   const { data, setData } = useAsync(async () => {
-    const [sumR, empR, expR] = await Promise.all([
+    const [sumR, empR, expR, ordersR] = await Promise.all([
       api.get('/admin/finance/summary'),
       api.get('/admin/employees'),
       api.get('/admin/expenses'),
+      api.get('/admin/orders'),
     ]);
-    return { dash: summaryToDash(sumR.data), employees: empR.data, expenses: expR.data };
+    const orders = ordersR.data || [];
+    return { dash: summaryToDash(sumR.data, orders), employees: empR.data, expenses: expR.data, orders };
   }, []);
 
   const reload = async () => {
-    const [sumR, empR, expR] = await Promise.all([
+    const [sumR, empR, expR, ordersR] = await Promise.all([
       api.get('/admin/finance/summary'),
       api.get('/admin/employees'),
       api.get('/admin/expenses'),
+      api.get('/admin/orders'),
     ]);
-    setData({ dash: summaryToDash(sumR.data), employees: empR.data, expenses: expR.data });
+    const orders = ordersR.data || [];
+    setData({ dash: summaryToDash(sumR.data, orders), employees: empR.data, expenses: expR.data, orders });
   };
 
   const saveEmployee = async (e) => {
@@ -154,20 +162,46 @@ export default function AdminFinance() {
   };
 
   const openReport = async (format) => {
-    // /admin/reports/export/{csv,pdf} NO existe en arquitectura de microservicios MVP.
-    // En su lugar generamos el reporte en cliente desde data.dash + data.expenses.
     try {
+      const expenseBreakdown = buildExpenseBreakdown(data.expenses);
+      const topProducts = data.dash.productos_mas_vendidos || [];
+      const insights = buildFinanceInsights(data.dash, topProducts, expenseBreakdown);
+      const grossSales = Number(data.dash.ventas_brutas || 0);
+      const netProfit = Number(data.dash.utilidad_neta || 0);
+      const margin = grossSales > 0 ? `${((netProfit / grossSales) * 100).toFixed(1)}%` : 'Sin ventas';
+      const generatedAt = new Date().toLocaleString('es-CO');
+      const csvCell = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+      const csvLine = (row) => row.map(csvCell).join(';');
+      const escapeHtml = (value) => String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+
       if (format === 'csv') {
         const rows = [
-          ['Concepto', 'Valor'],
-          ['Ventas brutas',    data.dash.ventas_brutas],
-          ['Pedidos aprobados', data.dash.ordenes_aprobadas],
-          ['COGS',             data.dash.cogs],
+          ['Reporte financiero Distrito Urbano'],
+          ['Generado', generatedAt],
+          [],
+          ['KPI', 'Valor'],
+          ['Ventas brutas', data.dash.ventas_brutas],
+          ['Pedidos con venta', data.dash.ordenes_aprobadas],
           ['Costos operativos', data.dash.costos_operativos],
-          ['Nomina',           data.dash.nomina],
-          ['Utilidad neta',    data.dash.utilidad_neta],
+          ['Nomina activa', data.dash.nomina],
+          ['Utilidad neta', data.dash.utilidad_neta],
+          ['Margen neto', margin],
+          [],
+          ['Productos mas vendidos', 'Unidades', 'Ingresos'],
+          ...topProducts.map((p) => [p.product_name, p.quantity, p.revenue]),
+          [],
+          ['Gastos por tipo', 'Total'],
+          ...expenseBreakdown.map((e) => [e.type, e.amount]),
+          [],
+          ['Lecturas clave'],
+          ...insights.map((line) => [line]),
         ];
-        const csv = rows.map((r) => r.join(',')).join('\n');
+        const csv = rows.map(csvLine).join('\n');
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -177,19 +211,61 @@ export default function AdminFinance() {
         URL.revokeObjectURL(url);
       } else {
         const win = window.open('', '_blank');
+        if (!win) {
+          toast('El navegador bloqueo la ventana del reporte.', 'error');
+          return;
+        }
         win.document.write(`
           <html><head><title>Reporte financiero</title>
-          <style>body{font-family:sans-serif;padding:2rem}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}</style>
+          <style>
+            body{font-family:Arial,sans-serif;color:#172026;padding:2rem;line-height:1.45}
+            h1{margin:0 0 .25rem;font-size:26px}
+            h2{margin:1.5rem 0 .6rem;font-size:17px}
+            .muted{color:#677067}
+            .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:1.25rem 0}
+            .kpi{border:1px solid #dfe5dc;border-radius:10px;padding:12px}
+            .kpi span{display:block;color:#677067;font-size:12px;margin-bottom:4px}
+            .kpi strong{font-size:20px}
+            table{border-collapse:collapse;width:100%;margin-top:.5rem}
+            td,th{border:1px solid #dfe5dc;padding:8px;text-align:left}
+            th{background:#f5f7f2}
+            .right{text-align:right}
+            .insights{background:#f5f7f2;border-radius:10px;padding:12px 16px}
+            @media print{button{display:none}body{padding:0}.grid{grid-template-columns:repeat(3,1fr)}}
+          </style>
           </head><body>
+          <button onclick="window.print()" style="float:right;padding:10px 14px;border:1px solid #dfe5dc;border-radius:8px;background:#fff;font-weight:700">Imprimir / guardar PDF</button>
           <h1>Reporte financiero</h1>
+          <div class="muted">Distrito Urbano · Generado ${generatedAt}</div>
+          <div class="grid">
+            <div class="kpi"><span>Ventas brutas</span><strong>${COP(data.dash.ventas_brutas)}</strong></div>
+            <div class="kpi"><span>Pedidos con venta</span><strong>${data.dash.ordenes_aprobadas}</strong></div>
+            <div class="kpi"><span>Margen neto</span><strong>${margin}</strong></div>
+            <div class="kpi"><span>Costos operativos</span><strong>${COP(data.dash.costos_operativos)}</strong></div>
+            <div class="kpi"><span>Nomina activa</span><strong>${COP(data.dash.nomina)}</strong></div>
+            <div class="kpi"><span>Utilidad neta</span><strong>${COP(data.dash.utilidad_neta)}</strong></div>
+          </div>
+          <h2>Lecturas clave</h2>
+          <ul class="insights">${insights.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>
+          <h2>Productos que explican la venta</h2>
           <table>
-            <tr><td>Ventas brutas</td><td>$${data.dash.ventas_brutas.toLocaleString('es-CO')}</td></tr>
-            <tr><td>Pedidos aprobados</td><td>${data.dash.ordenes_aprobadas}</td></tr>
-            <tr><td>Costos operativos</td><td>$${data.dash.costos_operativos.toLocaleString('es-CO')}</td></tr>
-            <tr><td>Nomina</td><td>$${data.dash.nomina.toLocaleString('es-CO')}</td></tr>
-            <tr><td><strong>Utilidad neta</strong></td><td><strong>$${data.dash.utilidad_neta.toLocaleString('es-CO')}</strong></td></tr>
+            <tr><th>#</th><th>Producto</th><th class="right">Unidades</th><th class="right">Ingresos</th></tr>
+            ${
+              topProducts.length
+                ? topProducts.map((p, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(p.product_name)}</td><td class="right">${p.quantity}</td><td class="right">${COP(p.revenue)}</td></tr>`).join('')
+                : '<tr><td colspan="4" class="muted">Sin ventas aprobadas en el periodo.</td></tr>'
+            }
           </table>
-          <p style="margin-top:2rem;color:#666">Generado por Tienda Digital - Fase 2 microservicios.</p>
+          <h2>Gastos operativos por tipo</h2>
+          <table>
+            <tr><th>Tipo</th><th class="right">Total</th></tr>
+            ${
+              expenseBreakdown.length
+                ? expenseBreakdown.map((e) => `<tr><td>${escapeHtml(e.type)}</td><td class="right">${COP(e.amount)}</td></tr>`).join('')
+                : '<tr><td colspan="2" class="muted">Sin gastos registrados.</td></tr>'
+            }
+          </table>
+          <p class="muted" style="margin-top:2rem">Este reporte usa pedidos con venta efectiva y gastos registrados en el panel administrativo.</p>
           </body></html>`);
         win.document.close();
       }
@@ -201,6 +277,9 @@ export default function AdminFinance() {
   if (!data) return <AdminLayout><div className="state">Cargando finanzas...</div></AdminLayout>;
 
   const { dash, employees, expenses } = data;
+  const expenseBreakdown = buildExpenseBreakdown(expenses);
+  const financeInsights = buildFinanceInsights(dash, dash.productos_mas_vendidos || [], expenseBreakdown);
+  const netMargin = dash.ventas_brutas > 0 ? `${((dash.utilidad_neta / dash.ventas_brutas) * 100).toFixed(1)}%` : 'Sin ventas';
 
   const utilidadNegativa = dash.utilidad_neta < 0;
 
@@ -208,7 +287,6 @@ export default function AdminFinance() {
     <AdminLayout>
       <div className="page-header">
         <div className="page-header-left">
-          <span className="page-eyebrow">RF-08</span>
           <h1 className="page-title">Finanzas</h1>
         </div>
         <div className="page-actions">
@@ -244,26 +322,41 @@ export default function AdminFinance() {
           <div className="kpi-grid" style={{ marginBottom: '1.5rem' }}>
             {[
               { label: 'Ventas brutas', value: COP(dash.ventas_brutas), color: 'green', icon: <DollarSign size={20} /> },
-              { label: 'COGS', value: COP(dash.cogs), color: 'orange', icon: <DollarSign size={20} /> },
+              { label: 'Pedidos con venta', value: dash.ordenes_aprobadas, color: 'blue', icon: <ShoppingCart size={20} /> },
               { label: 'Costos operativos', value: COP(dash.costos_operativos), color: 'orange', icon: <DollarSign size={20} /> },
               { label: 'Nómina activa', value: COP(dash.nomina), color: 'purple', icon: <Users size={20} /> },
-              { label: 'Utilidad neta', value: COP(dash.utilidad_neta), color: utilidadNegativa ? 'orange' : 'green', icon: <DollarSign size={20} /> },
-            ].map(({ label, value, color, icon }) => (
+              { label: 'Utilidad neta', value: COP(dash.utilidad_neta), sub: `Margen ${netMargin}`, color: utilidadNegativa ? 'orange' : 'green', icon: <DollarSign size={20} /> },
+            ].map(({ label, value, sub, color, icon }) => (
               <div key={label} className={`kpi-card kpi-${color}`}>
                 <div className="kpi-icon">{icon}</div>
                 <div className="kpi-body">
                   <div className="kpi-label">{label}</div>
                   <div className="kpi-value">{value}</div>
+                  {sub && <div className="kpi-sub">{sub}</div>}
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="section-card" style={{ marginBottom: '1.5rem' }}>
+            <div className="section-card-header">
+              <span className="section-card-title">Lecturas del periodo</span>
+            </div>
+            <div className="section-card-body" style={{ display: 'grid', gap: '0.6rem' }}>
+              {financeInsights.map((line) => (
+                <div key={line} style={{ color: '#4c5960', fontSize: '0.9rem' }}>{line}</div>
+              ))}
+            </div>
           </div>
 
           {/* Charts */}
           <div className="charts-grid">
             {/* Products sold */}
             <div className="chart-card">
-              <div className="chart-title">Productos más vendidos</div>
+              <div className="chart-title">
+                Productos más vendidos
+                <span style={{ fontSize: '0.8rem', color: '#9ca4a0', fontWeight: 400 }}>Por unidades</span>
+              </div>
               {dash.productos_mas_vendidos?.length > 0 ? (
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={dash.productos_mas_vendidos} barCategoryGap="35%">
@@ -287,13 +380,14 @@ export default function AdminFinance() {
           {dash.productos_mas_vendidos?.length > 0 && (
             <div className="table-wrap" style={{ marginTop: '1.5rem' }}>
               <table className="data-table">
-                <thead><tr><th>#</th><th>Producto</th><th style={{textAlign:'right'}}>Unidades vendidas</th></tr></thead>
+                <thead><tr><th>#</th><th>Producto</th><th style={{textAlign:'right'}}>Unidades</th><th style={{textAlign:'right'}}>Ingresos</th></tr></thead>
                 <tbody>
                   {dash.productos_mas_vendidos.map((p, i) => (
                     <tr key={p.product_name}>
                       <td style={{ color: '#9ca4a0', fontSize: '0.8125rem' }}>#{i + 1}</td>
                       <td><strong>{p.product_name}</strong></td>
                       <td style={{ textAlign: 'right', fontWeight: 800 }}>{p.quantity} uds</td>
+                      <td style={{ textAlign: 'right', fontWeight: 800 }}>{COP(p.revenue)}</td>
                     </tr>
                   ))}
                 </tbody>

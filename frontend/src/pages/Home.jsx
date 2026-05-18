@@ -3,6 +3,7 @@ import { ArrowRight, Package, ShieldCheck, Star, Truck, Zap } from 'lucide-react
 import api from '../api/client';
 import ProductCard from '../components/ProductCard';
 import { useAsync } from '../hooks/useAsync';
+import { assetUrl } from '../utils/assets';
 
 const FEATURES = [
   { icon: <Truck size={20} />, title: 'Envío a toda Colombia', sub: 'Calculamos el costo al momento' },
@@ -41,7 +42,7 @@ export default function Home() {
 
   const { settings, messages, categories, products } = data;
   const primaryColor = settings?.primary_color || '#1f7a5c';
-  const banner = settings?.banner_url || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1600&q=80';
+  const banner = assetUrl(settings?.banner_url) || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1600&q=80';
 
   return (
     <>

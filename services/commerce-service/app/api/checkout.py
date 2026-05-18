@@ -58,8 +58,10 @@ def checkout(
 
     # 1. Calcular totales (snapshot del carrito)
     subtotal = sum(Decimal(str(i.unit_price)) * i.quantity for i in cart.items)
-    additional = Decimal(str(payload.additional_costs))
-    discount = Decimal(str(payload.discount))
+    # En checkout de cliente no se aceptan ajustes de precio enviados desde el
+    # navegador. Descuentos y costos adicionales pertenecen a flujo admin/backoffice.
+    additional = Decimal("0")
+    discount = Decimal("0")
     total = max(Decimal("0"), subtotal + additional - discount)
 
     # 2. Crear orden CREATED
