@@ -30,9 +30,18 @@ export default function AdminReviews() {
 
   const updateApproval = async (review, approved) => {
     try {
-      await api.patch(`/admin/reviews/${review.id}?approved=${approved}`);
-      setReviews((prev) => prev.map((r) => (r.id === review.id ? { ...r, approved } : r)));
-      toast(approved ? 'Reseña aprobada.' : 'Reseña rechazada.', 'success');
+      // En microservicios: PATCH /admin/reviews/{id}/approve (aprobar) o
+      // DELETE /admin/reviews/{id} (eliminar/rechazar).
+      if (approved) {
+        await api.patch(`/admin/reviews/${review.id}/approve`);
+      } else {
+        await api.delete(`/admin/reviews/${review.id}`);
+      }
+      setReviews((prev) => approved
+        ? prev.map((r) => (r.id === review.id ? { ...r, approved } : r))
+        : prev.filter((r) => r.id !== review.id)
+      );
+      toast(approved ? 'Reseña aprobada.' : 'Reseña eliminada.', 'success');
     } catch (err) {
       toast(err.response?.data?.detail || 'Error al actualizar reseña.', 'error');
     }

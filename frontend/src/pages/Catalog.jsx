@@ -17,7 +17,7 @@ export default function Catalog() {
   const [products, setProducts] = useState([]);
   const [searching, setSearching] = useState(false);
   const { data, loading, error } = useAsync(async () => {
-    const [categories, products] = await Promise.all([api.get('/categories'), api.get('/products/search')]);
+    const [categories, products] = await Promise.all([api.get('/categories'), api.get('/products')]);
     return { categories: categories.data, products: products.data };
   }, []);
 
@@ -36,7 +36,7 @@ export default function Catalog() {
       Object.entries(filters).filter(([, value]) => value !== '' && value !== false)
     );
     try {
-      const { data: result } = await api.get('/products/search', { params: query });
+      const { data: result } = await api.get('/products', { params: query });
       setProducts(result);
     } finally {
       setSearching(false);

@@ -36,7 +36,8 @@ export default function ProductDetail() {
   const { data, loading, error } = useAsync(async () => {
     const [product, reviews] = await Promise.all([
       api.get(`/products/${id}`),
-      api.get(`/products/${id}/reviews`),
+      // En microservicios las resenas de un producto las sirve Commerce, no Catalog
+      api.get(`/reviews/product/${id}`),
     ]);
     return { product: product.data, reviews: reviews.data };
   }, [id]);

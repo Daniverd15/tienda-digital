@@ -67,22 +67,36 @@ export default function AdminFinance() {
   const [expForm, setExpForm] = useState(emptyExpense);
   const [loading, setLoading] = useState(false);
 
+  // Mapeo: /admin/finance/summary (microservicios) -> formato dashboard del monolito.
+  // Los campos que no calcula el summary (cogs, productos top, rotacion) van a 0 / [].
+  const summaryToDash = (s) => ({
+    ventas_brutas:        s.gross_sales || 0,
+    ordenes_aprobadas:    s.orders_count || 0,
+    cogs:                 0,
+    costos_operativos:    s.operating_expenses || 0,
+    nomina:               s.payroll || 0,
+    utilidad_neta:        s.net_profit || 0,
+    rotacion_inventario:  0,
+    pedidos_por_estado:   [],
+    productos_mas_vendidos: [],
+  });
+
   const { data, setData } = useAsync(async () => {
-    const [dashR, empR, expR] = await Promise.all([
-      api.get('/admin/dashboard'),
+    const [sumR, empR, expR] = await Promise.all([
+      api.get('/admin/finance/summary'),
       api.get('/admin/employees'),
       api.get('/admin/expenses'),
     ]);
-    return { dash: dashR.data, employees: empR.data, expenses: expR.data };
+    return { dash: summaryToDash(sumR.data), employees: empR.data, expenses: expR.data };
   }, []);
 
   const reload = async () => {
-    const [dashR, empR, expR] = await Promise.all([
-      api.get('/admin/dashboard'),
+    const [sumR, empR, expR] = await Promise.all([
+      api.get('/admin/finance/summary'),
       api.get('/admin/employees'),
       api.get('/admin/expenses'),
     ]);
-    setData({ dash: dashR.data, employees: empR.data, expenses: expR.data });
+    setData({ dash: summaryToDash(sumR.data), employees: empR.data, expenses: expR.data });
   };
 
   const saveEmployee = async (e) => {
@@ -140,9 +154,21 @@ export default function AdminFinance() {
   };
 
   const openReport = async (format) => {
+    // /admin/reports/export/{csv,pdf} NO existe en arquitectura de microservicios MVP.
+    // En su lugar generamos el reporte en cliente desde data.dash + data.expenses.
     try {
       if (format === 'csv') {
-        const { data: blob } = await api.get('/admin/reports/export/csv', { responseType: 'blob' });
+        const rows = [
+          ['Concepto', 'Valor'],
+          ['Ventas brutas',    data.dash.ventas_brutas],
+          ['Pedidos aprobados', data.dash.ordenes_aprobadas],
+          ['COGS',             data.dash.cogs],
+          ['Costos operativos', data.dash.costos_operativos],
+          ['Nomina',           data.dash.nomina],
+          ['Utilidad neta',    data.dash.utilidad_neta],
+        ];
+        const csv = rows.map((r) => r.join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -150,9 +176,21 @@ export default function AdminFinance() {
         a.click();
         URL.revokeObjectURL(url);
       } else {
-        const { data: html } = await api.get('/admin/reports/export/pdf', { responseType: 'text' });
         const win = window.open('', '_blank');
-        win.document.write(html);
+        win.document.write(`
+          <html><head><title>Reporte financiero</title>
+          <style>body{font-family:sans-serif;padding:2rem}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}</style>
+          </head><body>
+          <h1>Reporte financiero</h1>
+          <table>
+            <tr><td>Ventas brutas</td><td>$${data.dash.ventas_brutas.toLocaleString('es-CO')}</td></tr>
+            <tr><td>Pedidos aprobados</td><td>${data.dash.ordenes_aprobadas}</td></tr>
+            <tr><td>Costos operativos</td><td>$${data.dash.costos_operativos.toLocaleString('es-CO')}</td></tr>
+            <tr><td>Nomina</td><td>$${data.dash.nomina.toLocaleString('es-CO')}</td></tr>
+            <tr><td><strong>Utilidad neta</strong></td><td><strong>$${data.dash.utilidad_neta.toLocaleString('es-CO')}</strong></td></tr>
+          </table>
+          <p style="margin-top:2rem;color:#666">Generado por Tienda Digital - Fase 2 microservicios.</p>
+          </body></html>`);
         win.document.close();
       }
     } catch {

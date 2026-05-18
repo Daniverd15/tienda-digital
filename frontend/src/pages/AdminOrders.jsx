@@ -22,12 +22,28 @@ export default function AdminOrders() {
     return data;
   }, []);
 
+  // Mapeo de valores legacy del monolito a los del Commerce Service
+  const STATUS_MAP = {
+    preparacion: 'EN_PREPARACION',
+    enviado:     'ENVIADO',
+    entregado:   'ENTREGADO',
+    cancelado:   'CANCELADA',
+    // si ya viene en mayusculas, pasa tal cual
+    EN_PREPARACION: 'EN_PREPARACION',
+    ENVIADO:        'ENVIADO',
+    ENTREGADO:      'ENTREGADO',
+    CANCELADA:      'CANCELADA',
+  };
+
   const updateStatus = async (order, status) => {
     try {
-      const { data } = await api.put(`/admin/orders/${order.id}/status`, { status });
-      setData(orders.map((o) => (o.id === order.id ? data : o)));
-      if (selected?.id === order.id) setSelected(data);
-      toast(`Pedido actualizado a "${status}".`, 'success');
+      const new_status = STATUS_MAP[status] || status;
+      await api.patch(`/admin/orders/${order.id}/status`, { new_status });
+      // Recargamos el pedido completo desde el servidor
+      const { data: refreshed } = await api.get(`/admin/orders/${order.id}`);
+      setData(orders.map((o) => (o.id === order.id ? refreshed : o)));
+      if (selected?.id === order.id) setSelected(refreshed);
+      toast(`Pedido actualizado a "${new_status}".`, 'success');
     } catch (err) {
       toast(err.response?.data?.detail || 'Error al actualizar estado.', 'error');
     }

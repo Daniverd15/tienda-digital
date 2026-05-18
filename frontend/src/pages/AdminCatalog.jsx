@@ -36,11 +36,15 @@ function ImageUploader({ value, onChange, label = 'Imagen del producto' }) {
     if (!file) return;
     setUploading(true);
     try {
+      // El endpoint /admin/upload-image NO existe en arquitectura de microservicios
+      // (el monolito legacy lo tenia). En microservicios usamos URLs externas; el
+      // admin pega un enlace o usa el campo de URL manualmente.
       const form = new FormData();
       form.append('file', file);
       const { data } = await api.post('/admin/upload-image', form, { headers: { 'Content-Type': 'multipart/form-data' } });
       onChange(data.url);
     } catch {
+      // Modo degradado: pedimos al admin que pegue la URL manualmente
       onChange('');
     } finally { setUploading(false); }
   };
@@ -105,7 +109,7 @@ export default function AdminCatalog() {
 
   useEffect(() => {
     if (!selectedProduct) return;
-    api.get(`/admin/products/${selectedProduct}/variants`).then(({ data }) => setVariants(data));
+    api.get(`/admin/inventory/variants?product_id=${selectedProduct}`).then(({ data }) => setVariants(data));
   }, [selectedProduct]);
 
   /* ── Categories ── */
@@ -129,7 +133,7 @@ export default function AdminCatalog() {
   };
 
   const archiveCategory = async (id) => {
-    await api.patch(`/admin/categories/${id}/archive`).catch(() => api.put(`/admin/categories/${id}`, { archived: true }));
+    await api.delete(`/admin/categories/${id}`).catch(() => api.put(`/admin/categories/${id}`, { archived: true, active: false }));
     toast('Categoría archivada.', 'success');
     load();
   };
@@ -181,16 +185,16 @@ export default function AdminCatalog() {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.post(`/admin/products/${selectedProduct}/variants`, {
+      await api.post(`/admin/inventory/variants`, {
+        product_id: Number(selectedProduct),
         ...variantForm,
         cost: Number(variantForm.cost),
         price: Number(variantForm.price),
         stock: Number(variantForm.stock),
-        reserved_stock: Number(variantForm.reserved_stock),
       });
       toast('Variante creada.', 'success');
       setVariantForm(emptyVariant);
-      const { data } = await api.get(`/admin/products/${selectedProduct}/variants`);
+      const { data } = await api.get(`/admin/inventory/variants?product_id=${selectedProduct}`);
       setVariants(data);
       load();
     } catch (err) {

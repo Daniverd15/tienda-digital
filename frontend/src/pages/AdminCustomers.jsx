@@ -28,7 +28,8 @@ export default function AdminCustomers() {
     setSelected(customer);
     setLoadingOrders(true);
     try {
-      const { data } = await api.get(`/admin/customers/${customer.id}/orders`);
+      // En microservicios: pedimos /admin/orders filtrado por user_id
+      const { data } = await api.get(`/admin/orders?user_id=${customer.id}`);
       setOrders(data);
     } catch {
       toast('Error al cargar los pedidos del cliente.', 'error');
@@ -38,15 +39,10 @@ export default function AdminCustomers() {
     }
   };
 
-  const toggleStatus = async (customer, active) => {
-    try {
-      const { data } = await api.patch(`/admin/customers/${customer.id}/status?active=${active}`);
-      setCustomers((prev) => prev.map((c) => (c.id === customer.id ? { ...c, active: data.active } : c)));
-      if (selected?.id === customer.id) setSelected((s) => ({ ...s, active: data.active }));
-      toast(active ? 'Cliente activado.' : 'Cliente restringido.', 'success');
-    } catch (err) {
-      toast(err.response?.data?.detail || 'Error al actualizar estado.', 'error');
-    }
+  const toggleStatus = async (_customer, _active) => {
+    // Activar/desactivar clientes no esta implementado en el MVP de microservicios.
+    // Auth Service expone GET /admin/customers solo lectura. Quedaria en evolucion futura.
+    toast('Activar/desactivar clientes no esta disponible en esta version.', 'warning');
   };
 
   if (loading) return <AdminLayout><div className="state">Cargando clientes...</div></AdminLayout>;

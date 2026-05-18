@@ -8,8 +8,11 @@ export default function Notifications() {
   }, []);
 
   const markRead = async (notification) => {
-    await api.put(`/notifications/${notification.id}/read`);
-    setData(notifications.map((item) => (item.id === notification.id ? { ...item, read: true } : item)));
+    await api.patch(`/notifications/${notification.id}/read`);
+    // En microservicios el campo es read_at (timestamp), no read (bool). Marcamos ambos.
+    setData(notifications.map((item) =>
+      item.id === notification.id ? { ...item, read: true, read_at: new Date().toISOString() } : item
+    ));
   };
 
   if (loading) return <div className="state">Cargando notificaciones...</div>;
@@ -21,11 +24,11 @@ export default function Notifications() {
       <h1>Notificaciones</h1>
       <div className="table-list">
         {notifications.map((notification) => (
-          <article className={notification.read ? 'row-card muted' : 'row-card'} key={notification.id}>
+          <article className={(notification.read || notification.read_at) ? 'row-card muted' : 'row-card'} key={notification.id}>
             <strong>{notification.title}</strong>
             <span>{notification.message}</span>
-            <button className="ghost-button" onClick={() => markRead(notification)} disabled={notification.read}>
-              {notification.read ? 'Leida' : 'Marcar leida'}
+            <button className="ghost-button" onClick={() => markRead(notification)} disabled={(notification.read || notification.read_at)}>
+              {(notification.read || notification.read_at) ? 'Leida' : 'Marcar leida'}
             </button>
           </article>
         ))}

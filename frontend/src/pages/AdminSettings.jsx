@@ -75,7 +75,7 @@ export default function AdminSettings() {
 
   const load = async () => {
     const [sR, mR] = await Promise.all([
-      api.get('/admin/settings'),
+      api.get('/admin/store/settings'),
       api.get('/admin/messages'),
     ]);
     setSettings(sR.data);
@@ -88,7 +88,7 @@ export default function AdminSettings() {
     e.preventDefault();
     setSaving(true);
     try {
-      const { data } = await api.put('/admin/settings', settings);
+      const { data } = await api.put('/admin/store/settings', settings);
       setSettings(data);
       // Apply colors immediately
       if (data.primary_color) {

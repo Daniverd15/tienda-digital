@@ -71,14 +71,32 @@ const CustomPieTooltip = ({ active, payload }) => {
 
 export default function AdminHome() {
   const { data, loading, error } = useAsync(async () => {
-    const [dash, orders, alerts, customers] = await Promise.all([
-      api.get('/admin/dashboard'),
+    // En microservicios sustituimos /admin/dashboard por /admin/finance/summary
+    // y completamos con defaults los campos detallados que no expone (cogs,
+    // productos mas vendidos, rotacion). Esto deja la UI consistente y degrada
+    // los KPI no calculados a 0 / arreglos vacios.
+    const [summary, orders, alerts, customers] = await Promise.all([
+      api.get('/admin/finance/summary'),
       api.get('/admin/orders'),
       api.get('/admin/inventory/alerts'),
       api.get('/admin/customers'),
     ]);
+    const s = summary.data;
+    const dash = {
+      ventas_brutas:        s.gross_sales || 0,
+      ordenes_aprobadas:    s.orders_count || 0,
+      cogs:                 0,
+      costos_operativos:    s.operating_expenses || 0,
+      nomina:               s.payroll || 0,
+      utilidad_neta:        s.net_profit || 0,
+      rotacion_inventario:  0,
+      pedidos_por_estado: Object.entries(
+        orders.data.reduce((acc, o) => ({ ...acc, [o.status]: (acc[o.status] || 0) + 1 }), {})
+      ).map(([estado, count]) => ({ estado, count })),
+      productos_mas_vendidos: [],
+    };
     return {
-      dash: dash.data,
+      dash,
       orders: orders.data,
       alerts: alerts.data,
       customerCount: customers.data.length,

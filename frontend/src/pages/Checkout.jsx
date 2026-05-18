@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CreditCard, MapPin, User } from 'lucide-react';
 import api from '../api/client';
@@ -15,30 +15,49 @@ const initialForm = {
   additional_costs: 0,
 };
 
+// En la arquitectura de microservicios, POST /api/checkout ejecuta TODA la
+// SAGA (reservar -> pagar -> confirmar/liberar). Por eso este formulario
+// calcula el resumen localmente desde el carrito y deja el pago a la
+// siguiente pantalla (PaymentResult).
 export default function Checkout() {
   const navigate = useNavigate();
   const toast = useToast();
   const [form, setForm] = useState(initialForm);
+  const [cart, setCart] = useState(null);
   const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get('/cart').then(({ data }) => {
+      setCart(data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
 
   const upd = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
-  const calculate = async (e) => {
+  const calculate = (e) => {
     e.preventDefault();
-    setLoading(true);
-    try {
-      const { data } = await api.post('/checkout', {
-        ...form,
-        discount: Number(form.discount),
-        additional_costs: Number(form.additional_costs),
-      });
-      setSummary(data);
-      toast('Stock verificado. Revisa el resumen y procede al pago.', 'success');
-    } catch (err) {
-      toast(err.response?.data?.detail || 'No se pudo validar el checkout.', 'error');
-    } finally { setLoading(false); }
+    if (!cart || !cart.items || cart.items.length === 0) {
+      toast('Tu carrito esta vacio. Agrega productos antes del checkout.', 'error');
+      return;
+    }
+    const subtotal = Number(cart.subtotal || 0);
+    const additional = Number(form.additional_costs || 0);
+    const discount = Number(form.discount || 0);
+    const total = Math.max(0, subtotal + additional - discount);
+    setSummary({ subtotal, additional_costs: additional, discount, total });
+    toast('Resumen calculado. Procede al pago.', 'success');
   };
+
+  if (loading) return <div className="state">Cargando carrito...</div>;
+  if (!cart || cart.items.length === 0) {
+    return (
+      <main className="page-shell">
+        <div className="state">Tu carrito esta vacio. Vuelve al catalogo.</div>
+      </main>
+    );
+  }
 
   return (
     <main className="page-shell">
@@ -104,14 +123,18 @@ export default function Checkout() {
               </div>
             </div>
 
-            <button type="submit" className="btn btn-primary btn-full btn-lg" disabled={loading}>
-              {loading ? 'Validando stock…' : 'Verificar stock y calcular total'}
+            <button type="submit" className="btn btn-primary btn-full btn-lg">
+              Calcular total
             </button>
           </div>
 
           {/* Right — summary */}
           <aside className="cart-summary" style={{ top: 'calc(var(--topbar-h) + 1rem)' }}>
             <h2>Resumen</h2>
+            <div className="summary-row">
+              <span>Items en carrito</span>
+              <span>{cart.item_count}</span>
+            </div>
             {summary ? (
               <>
                 <div className="summary-row">
@@ -138,13 +161,10 @@ export default function Checkout() {
                 >
                   Ir a pagar →
                 </button>
-                <div className="alert success" style={{ marginTop: '0.75rem', fontSize: '0.8125rem' }}>
-                  Stock verificado. Puedes proceder al pago.
-                </div>
               </>
             ) : (
               <div style={{ color: 'var(--neutral-400)', fontSize: '0.875rem', textAlign: 'center', padding: '1.5rem 0' }}>
-                Completa los datos y verifica el stock para ver el total.
+                Completa los datos y calcula el total para continuar.
               </div>
             )}
           </aside>

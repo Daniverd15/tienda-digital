@@ -8,7 +8,7 @@ const COP = (v) => `$${Number(v || 0).toLocaleString('es-CO')}`;
 
 export default function MyOrders() {
   const { data: orders = [], loading, error } = useAsync(async () => {
-    const { data } = await api.get('/orders/my');
+    const { data } = await api.get('/orders/mine');
     return data;
   }, []);
 

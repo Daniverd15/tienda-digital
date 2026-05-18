@@ -4,16 +4,27 @@ import { CheckCircle, Clock, ShoppingCart, XCircle } from 'lucide-react';
 import api from '../api/client';
 import { useToast } from '../context/ToastContext';
 
+// En arquitectura de microservicios, POST /api/checkout ejecuta la SAGA
+// completa (reserva + cobro + confirm/release). El monto define el resultado
+// del mock: total con .00 -> APPROVED, .77 -> REJECTED, .99 -> PENDING.
+// Aqui ajustamos los centavos sumando un pequeno offset a additional_costs.
 const RESULT_CONFIG = {
-  aprobado:  { icon: <CheckCircle size={36} />, title: '¡Pago aprobado!',   sub: 'Tu pedido fue creado y está en proceso.', variant: 'success' },
-  rechazado: { icon: <XCircle    size={36} />, title: 'Pago rechazado',    sub: 'El pago no fue procesado. Intenta con otro método.', variant: 'error' },
-  pendiente: { icon: <Clock      size={36} />, title: 'Pago pendiente',    sub: 'El pago está en revisión. Te notificaremos cuando se confirme.', variant: 'pending' },
+  APPROVED:  { icon: <CheckCircle size={36} />, title: '¡Pago aprobado!',   sub: 'Tu pedido fue creado y está en proceso.', variant: 'success' },
+  REJECTED:  { icon: <XCircle    size={36} />, title: 'Pago rechazado',    sub: 'El pago no fue procesado. Intenta con otro método.', variant: 'error' },
+  PENDING:   { icon: <Clock      size={36} />, title: 'Pago pendiente',    sub: 'El pago está en revisión. Te notificaremos cuando se confirme.', variant: 'pending' },
+  FAILED:    { icon: <XCircle    size={36} />, title: 'Pasarela no disponible', sub: 'No pudimos comunicarnos con la pasarela. El pedido queda pendiente.', variant: 'error' },
+};
+
+const OFFSETS = {
+  APPROVED: 0,
+  REJECTED: 0.77,
+  PENDING:  0.99,
 };
 
 export default function PaymentResult() {
   const { state } = useLocation();
   const toast = useToast();
-  const [simStatus, setSimStatus] = useState('aprobado');
+  const [simStatus, setSimStatus] = useState('APPROVED');
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -33,28 +44,28 @@ export default function PaymentResult() {
   const pay = async () => {
     setLoading(true);
     try {
-      const { data: payment } = await api.post('/payments/simulate', {
-        amount: state.summary.total,
-        requested_status: simStatus,
-      });
-      const { data: createdOrder } = await api.post('/orders', {
+      const offset = OFFSETS[simStatus] || 0;
+      const adjusted = Number(state.checkout.additional_costs || 0) + offset;
+      const { data } = await api.post('/checkout', {
         ...state.checkout,
-        payment_status: payment.status,
-        transaction_reference: payment.transaction_reference,
-        response_message: payment.response_message,
+        additional_costs: adjusted,
+        discount: Number(state.checkout.discount || 0),
+      }, {
+        headers: { 'Idempotency-Key': `${Date.now()}-${Math.random().toString(36).slice(2, 10)}` },
       });
-      setOrder(createdOrder);
-      const cfg = RESULT_CONFIG[createdOrder.payment_status];
-      toast(cfg.title, createdOrder.payment_status === 'aprobado' ? 'success' : createdOrder.payment_status === 'rechazado' ? 'error' : 'warning');
+      setOrder(data);
+      const cfg = RESULT_CONFIG[data.payment_status] || RESULT_CONFIG.PENDING;
+      toast(cfg.title, data.payment_status === 'APPROVED' ? 'success' :
+                       data.payment_status === 'REJECTED' ? 'error' : 'warning');
     } catch (err) {
-      toast(err.response?.data?.detail || 'No se pudo finalizar el pedido.', 'error');
+      toast(err.response?.data?.detail?.message || err.response?.data?.detail || 'No se pudo finalizar el pedido.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   if (order) {
-    const cfg = RESULT_CONFIG[order.payment_status] || RESULT_CONFIG.pendiente;
+    const cfg = RESULT_CONFIG[order.payment_status] || RESULT_CONFIG.PENDING;
     return (
       <div className="payment-result-page">
         <div className="payment-result-card">
@@ -75,9 +86,14 @@ export default function PaymentResult() {
             <div className="font-mono" style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--neutral-900)' }}>
               {order.order_code}
             </div>
+            {order.message && (
+              <div style={{ fontSize: '0.8125rem', color: 'var(--neutral-500)', marginTop: '0.5rem' }}>
+                {order.message}
+              </div>
+            )}
           </div>
           <div style={{ display: 'grid', gap: '0.6rem' }}>
-            <Link to={`/pedidos/${order.id}`} className="btn btn-primary btn-full">
+            <Link to={`/pedidos/${order.order_id}`} className="btn btn-primary btn-full">
               Ver detalle del pedido
             </Link>
             <Link to="/catalogo" className="btn btn-secondary btn-full">
@@ -98,7 +114,6 @@ export default function PaymentResult() {
         <h2>Pasarela de pago</h2>
         <p>Elige el resultado a simular para este pago de <strong>${Number(state.summary.total).toLocaleString('es-CO')}</strong>.</p>
 
-        {/* Simulated gateway selector */}
         <div style={{
           background: 'var(--neutral-50)',
           border: '1px solid var(--neutral-200)',
@@ -112,9 +127,9 @@ export default function PaymentResult() {
           </div>
           <div style={{ display: 'grid', gap: '0.5rem' }}>
             {[
-              { value: 'aprobado',  label: 'Pago aprobado',  desc: 'El pedido se crea y el inventario se descuenta', color: 'var(--success-text)' },
-              { value: 'rechazado', label: 'Pago rechazado', desc: 'El pedido se crea pero no descuenta inventario',  color: 'var(--error-text)' },
-              { value: 'pendiente', label: 'Pago pendiente', desc: 'El pedido queda en espera de confirmación',       color: 'var(--warning-text)' },
+              { value: 'APPROVED', label: 'Pago aprobado',  desc: 'SAGA completa: reserva + cobro + confirm; orden PAID', color: 'var(--success-text)' },
+              { value: 'REJECTED', label: 'Pago rechazado', desc: 'Compensacion: stock liberado; orden PAGO_RECHAZADO',   color: 'var(--error-text)' },
+              { value: 'PENDING',  label: 'Pago pendiente', desc: 'La pasarela demora; orden PAGO_PENDIENTE',             color: 'var(--warning-text)' },
             ].map((opt) => (
               <label
                 key={opt.value}
