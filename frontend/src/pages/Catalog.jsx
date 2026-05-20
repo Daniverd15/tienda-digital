@@ -32,8 +32,11 @@ export default function Catalog() {
   const onSearch = async (event) => {
     event.preventDefault();
     setSearching(true);
+    // Solo enviamos al backend los filtros que entiende; in_stock se aplica
+    // en cliente porque el endpoint /products no acepta ese parametro.
+    const { in_stock, ...serverFilters } = filters;
     const query = Object.fromEntries(
-      Object.entries(filters).filter(([, value]) => value !== '' && value !== false)
+      Object.entries(serverFilters).filter(([, value]) => value !== '' && value !== false)
     );
     try {
       const { data: result } = await api.get('/products', { params: query });
@@ -42,6 +45,12 @@ export default function Catalog() {
       setSearching(false);
     }
   };
+
+  // Filtro cliente de "Con stock": un producto cuenta con stock si Inventory
+  // confirmo que tiene al menos 1 unidad disponible.
+  const visibleProducts = filters.in_stock
+    ? products.filter((p) => (p.inventory_available !== false) && Number(p.stock || 0) > 0)
+    : products;
 
   if (loading) return <div className="state">Cargando catalogo...</div>;
   if (error) return <div className="state error">{error}</div>;
@@ -106,11 +115,17 @@ export default function Catalog() {
         <button className="btn btn-primary" style={{ margin: 0, width: 'auto' }} disabled={searching}>{searching ? 'Buscando…' : 'Buscar'}</button>
       </form>
       <div className="product-grid">
-        {products.map((product) => (
+        {visibleProducts.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}
       </div>
-      {products.length === 0 && <p className="state">No hay productos activos en esta categoria.</p>}
+      {visibleProducts.length === 0 && (
+        <p className="state">
+          {filters.in_stock
+            ? 'No hay productos con stock disponible. Desmarca el filtro "Con stock" para ver el resto del catálogo.'
+            : 'No hay productos activos en esta categoría.'}
+        </p>
+      )}
     </main>
   );
 }

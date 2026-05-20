@@ -15,12 +15,12 @@ export default function ProductCard({ product }) {
   const isLowStock = stockKnown && stock > 0 && stock <= 5;
 
   return (
-    <article className="product-card">
+    <article className={`product-card${isOutOfStock ? ' product-card-out' : ''}`}>
       <div className="product-card-img">
         <img src={image} alt={product.name} loading="lazy" />
         {isOutOfStock && (
           <div className="card-badge card-badge-out">
-            AGOTADO
+            <span className="card-badge-label">AGOTADO</span>
           </div>
         )}
         {!isOutOfStock && isLowStock && (
