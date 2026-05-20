@@ -43,11 +43,51 @@ def soft_migrate() -> None:
             pass
 
 
+def backfill_unit_cost() -> int:
+    """Recorre OrderItem con unit_cost=0 y los actualiza con el costo actual
+    en Inventory. Idempotente: solo afecta filas con unit_cost=0.
+
+    Devuelve la cantidad de filas actualizadas. Util para corregir el dataset
+    historico despues de agregar la columna unit_cost.
+    """
+    from app.models import OrderItem
+    from app.services.http_clients import inventory_get_variants_by_ids
+    db = SessionLocal()
+    try:
+        rows = db.query(OrderItem).filter(OrderItem.unit_cost == 0).all()
+        if not rows:
+            return 0
+        variant_ids = list({r.variant_id for r in rows})
+        cost_map = inventory_get_variants_by_ids(variant_ids)
+        updated = 0
+        for it in rows:
+            info = cost_map.get(it.variant_id) or cost_map.get(str(it.variant_id))
+            if info and info.get("cost"):
+                it.unit_cost = float(info["cost"])
+                updated += 1
+        if updated:
+            db.commit()
+            logger.info("Backfill unit_cost: %d order_items actualizados", updated)
+        return updated
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Backfill unit_cost fallo: %s", exc)
+        return 0
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Inicializando %s ...", settings.service_name)
     Base.metadata.create_all(bind=engine)
     soft_migrate()
+    # Backfill best-effort: corre en background, no bloquea el startup.
+    try:
+        n = backfill_unit_cost()
+        if n:
+            logger.info("Startup backfill: %d order_items con unit_cost actualizado", n)
+    except Exception:  # noqa: BLE001
+        pass
     logger.info("%s listo en puerto %s", settings.service_name, settings.service_port)
     yield
 

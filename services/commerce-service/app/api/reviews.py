@@ -63,15 +63,17 @@ def create_review(
     )
     if existing:
         raise HTTPException(409, "Ya resenaste este producto para este pedido.")
+    # IMPORTANTE: las resenas entran como PENDIENTES (approved=False).
+    # El admin debe aprobarlas en /admin/resenas antes de que se vean en
+    # /reviews/product/{id} y antes de que afecten al RatingSummary del producto.
     r = Review(
         user_id=user_id, product_id=payload.product_id, order_id=payload.order_id,
-        rating=payload.rating, comment=payload.comment, approved=True,
+        rating=payload.rating, comment=payload.comment, approved=False,
     )
     db.add(r)
     db.commit()
     db.refresh(r)
-    # Notificar a Catalog para que actualice su RatingSummary
-    _refresh_rating_in_catalog(db, payload.product_id, token, correlation_id)
+    # NO recalculamos rating en Catalog aqui — solo se hace cuando admin aprueba.
     return r
 
 

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Search, Shield, Activity, User, ShoppingBag, Filter, Download } from 'lucide-react';
+import { Search, Shield, Activity, User, ShoppingBag, Filter, Download, Link2, Copy, MapPin } from 'lucide-react';
 import api from '../api/client';
 import AdminLayout from '../components/AdminLayout';
 import { useToast } from '../context/ToastContext';
+import { fmtDateTime, fmtRelative } from '../utils/datetime';
 
 /**
  * Bitácora de auditoría unificada.
@@ -49,12 +50,6 @@ function ActionBadge({ action }) {
   );
 }
 
-function fmtDate(d) {
-  if (!d) return '—';
-  try { return new Date(d).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }); }
-  catch { return '—'; }
-}
-
 export default function AdminAudit() {
   const toast = useToast();
   const [search, setSearch] = useState('');
@@ -64,6 +59,8 @@ export default function AdminAudit() {
   const [events, setEvents] = useState([]);
   const [orderStats, setOrderStats] = useState({});
   const [loading, setLoading] = useState(true);
+  const [userMap, setUserMap] = useState({});
+  const [expandedCorr, setExpandedCorr] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -72,10 +69,18 @@ export default function AdminAudit() {
       api.get('/admin/audit-logs').catch(() => ({ data: [] })),
       api.get('/admin/access-logs').catch(() => ({ data: [] })),
       api.get('/admin/orders').catch(() => ({ data: [] })),
-    ]).then(([auditR, accessR, ordersR]) => {
+      api.get('/admin/customers').catch(() => ({ data: [] })),
+    ]).then(([auditR, accessR, ordersR, customersR]) => {
       if (!active) return;
+      // Mapa de usuarios para mostrar nombre real en vez de "#15"
+      const uMap = {};
+      (customersR.data || []).forEach((c) => { uMap[c.id] = { name: c.name, email: c.email, role: 'customer' }; });
+      uMap[1] = uMap[1] || { name: 'Administrador', email: 'admin@tienda.com', role: 'admin' };
+      setUserMap(uMap);
+
       const orderByPK = {};
       (ordersR.data || []).forEach((o) => { orderByPK[o.id] = o; });
+
       const orderEvents = (auditR.data || []).map((e) => ({
         source: 'order',
         id: `o-${e.id}`,
@@ -85,6 +90,8 @@ export default function AdminAudit() {
         ref: orderByPK[e.order_id]?.order_code || (e.order_id ? `#${e.order_id}` : ''),
         order_id: e.order_id,
         order_code: orderByPK[e.order_id]?.order_code,
+        order_total: orderByPK[e.order_id]?.total,
+        order_user: orderByPK[e.order_id]?.user_id,
         details: e.details,
         correlation_id: e.correlation_id,
       }));
@@ -95,13 +102,14 @@ export default function AdminAudit() {
         when: e.created_at,
         actor_id: e.user_id,
         ref: e.ip || '—',
+        ip: e.ip,
+        user_agent: e.user_agent,
         details: e.user_agent,
         correlation_id: e.correlation_id,
       }));
       const all = [...orderEvents, ...accessEvents].sort((a, b) =>
         new Date(b.when) - new Date(a.when));
       setEvents(all);
-      // Stats
       const stats = { total: all.length, ordersWithEvents: new Set(orderEvents.map((e) => e.order_id).filter(Boolean)).size };
       stats.loginFailed = accessEvents.filter((e) => e.action === 'login_failed').length;
       stats.paymentApproved = orderEvents.filter((e) => e.action === 'payment_approved').length;
@@ -112,6 +120,150 @@ export default function AdminAudit() {
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);  // eslint-disable-line
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard?.writeText(text).then(
+      () => toast('Copiado al portapapeles', 'success'),
+      () => toast('No se pudo copiar', 'error'),
+    );
+  };
+
+  const renderActor = (e) => {
+    const id = e.actor_id;
+    if (!id) {
+      if (e.source === 'access' && e.action === 'login_failed') {
+        return <span style={{ color: 'var(--error-text)', fontWeight: 600 }}>Email inválido</span>;
+      }
+      return <span style={{ color: 'var(--neutral-400)' }}>Sistema</span>;
+    }
+    const u = userMap[id];
+    if (u) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <span style={{ fontWeight: 700, fontSize: '0.8125rem', color: 'var(--neutral-900)' }}>
+            {u.role === 'admin' && <Shield size={11} style={{ display: 'inline', marginRight: 3, color: 'var(--brand-600)' }} />}
+            {u.name}
+          </span>
+          <span style={{ fontSize: '0.72rem', color: 'var(--neutral-500)' }}>{u.email}</span>
+        </div>
+      );
+    }
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--neutral-600)', fontSize: '0.8125rem' }}>
+        <User size={12} /> Usuario #{id}
+      </span>
+    );
+  };
+
+  const renderRef = (e) => {
+    if (e.source === 'order') {
+      if (e.order_code) {
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <span className="font-mono" style={{ fontWeight: 700, color: 'var(--brand-600)', fontSize: '0.8125rem' }}>
+              {e.order_code}
+            </span>
+            {e.order_total && (
+              <span style={{ fontSize: '0.7rem', color: 'var(--neutral-500)' }}>
+                ${Number(e.order_total).toLocaleString('es-CO')}
+              </span>
+            )}
+          </div>
+        );
+      }
+      return <span style={{ color: 'var(--neutral-500)' }}>{e.ref}</span>;
+    }
+    // access event: mostrar IP + User-Agent corto
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600, fontSize: '0.8125rem', color: 'var(--neutral-700)' }}>
+          <MapPin size={11} /> {e.ip || '—'}
+        </span>
+        {e.user_agent && (
+          <span style={{ fontSize: '0.7rem', color: 'var(--neutral-500)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                title={e.user_agent}>
+            {e.user_agent.includes('Chrome') ? 'Chrome' :
+             e.user_agent.includes('Firefox') ? 'Firefox' :
+             e.user_agent.includes('Safari') ? 'Safari' :
+             e.user_agent.includes('curl') ? 'curl' : 'Navegador'}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const renderCorrelation = (cid) => {
+    if (!cid) return <span style={{ color: 'var(--neutral-400)' }}>—</span>;
+    const isExpanded = expandedCorr === cid;
+    const relatedCount = events.filter((ev) => ev.correlation_id === cid).length;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <button
+          type="button"
+          onClick={() => setExpandedCorr(isExpanded ? null : cid)}
+          title={`Ver ${relatedCount} evento(s) de esta sesión`}
+          style={{
+            background: isExpanded ? 'var(--brand-100)' : 'var(--neutral-100)',
+            border: '1px solid ' + (isExpanded ? 'var(--brand-300)' : 'var(--neutral-200)'),
+            padding: '2px 8px', borderRadius: 6, cursor: 'pointer',
+            fontSize: '0.7rem', fontFamily: 'monospace',
+            color: isExpanded ? 'var(--brand-700)' : 'var(--neutral-700)',
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+          }}>
+          <Link2 size={10} />
+          {String(cid).slice(0, 8)}
+          {relatedCount > 1 && (
+            <span style={{
+              background: 'var(--brand-500)', color: '#fff',
+              borderRadius: 99, padding: '0 5px', fontSize: '0.65rem', fontWeight: 700,
+            }}>
+              {relatedCount}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => copyToClipboard(cid)}
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--neutral-400)', fontSize: '0.65rem', display: 'inline-flex', alignItems: 'center', gap: 3, padding: 0 }}
+          title="Copiar correlation_id">
+          <Copy size={9} /> copiar
+        </button>
+      </div>
+    );
+  };
+
+  const renderDetail = (e) => {
+    if (!e.details && e.action) {
+      // Detalle por tipo de acción
+      if (e.action === 'payment_approved') return <span style={{ color: 'var(--success-text)', fontWeight: 600 }}>✓ Pago capturado</span>;
+      if (e.action === 'payment_rejected') return <span style={{ color: 'var(--error-text)' }}>Compensación SAGA: stock liberado</span>;
+      if (e.action === 'login') return <span style={{ color: 'var(--neutral-500)' }}>Sesión iniciada correctamente</span>;
+      if (e.action === 'login_failed') return <span style={{ color: 'var(--error-text)' }}>Credenciales incorrectas</span>;
+      if (e.action === 'register') return <span style={{ color: 'var(--success-text)' }}>Nueva cuenta creada</span>;
+      if (e.action === 'logout') return <span style={{ color: 'var(--neutral-500)' }}>Cierre de sesión local</span>;
+      if (e.action === 'refresh') return <span style={{ color: 'var(--neutral-500)' }}>Token renovado</span>;
+      return <span style={{ color: 'var(--neutral-400)' }}>—</span>;
+    }
+    if (!e.details) return <span style={{ color: 'var(--neutral-400)' }}>—</span>;
+    const text = String(e.details);
+    // Detección de "ref=..." en acciones de pago
+    if (text.startsWith('ref=')) {
+      return <span style={{ color: 'var(--neutral-600)', fontSize: '0.8rem' }}>
+        Ref. pasarela: <code style={{ background: 'var(--neutral-100)', padding: '1px 5px', borderRadius: 3 }}>{text.slice(4)}</code>
+      </span>;
+    }
+    const short = text.length > 120 ? text.slice(0, 117) + '...' : text;
+    return (
+      <details style={{ fontSize: '0.8rem' }}>
+        <summary style={{ cursor: 'pointer', color: 'var(--neutral-700)' }}>{short}</summary>
+        {text.length > 120 && (
+          <div style={{ marginTop: 6, padding: 8, background: 'var(--neutral-50)', borderRadius: 6, fontFamily: 'monospace', fontSize: '0.72rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {text}
+          </div>
+        )}
+      </details>
+    );
+  };
 
   const now = Date.now();
   const cutoff = now - (Number(days || 30) * 24 * 60 * 60 * 1000);
@@ -159,13 +311,6 @@ export default function AdminAudit() {
             <Download size={14} /> Exportar CSV
           </button>
         </div>
-      </div>
-
-      <div className="alert info" style={{ marginBottom: '1.25rem' }}>
-        <Activity size={16} />
-        Toda acción crítica del sistema queda registrada para trazabilidad (RNF-14).
-        El <strong>correlation_id</strong> permite seguir la pelicula completa de una sesión a
-        través de los 5 microservicios (login → checkout → pago → entrega).
       </div>
 
       {/* KPIs */}
@@ -253,16 +398,27 @@ export default function AdminAudit() {
         <span style={{ fontSize: '0.8125rem', color: '#9ca4a0' }}>{filtered.length} resultado(s)</span>
       </div>
 
+      {expandedCorr && (
+        <div className="alert info" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>
+            Mostrando solo los eventos del correlation <code style={{ background: 'rgba(255,255,255,0.4)', padding: '1px 6px', borderRadius: 4 }}>{expandedCorr.slice(0, 16)}…</code>
+          </span>
+          <button className="btn btn-ghost btn-sm" onClick={() => setExpandedCorr(null)}>
+            Limpiar filtro
+          </button>
+        </div>
+      )}
+
       <div className="table-wrap">
-        <table className="data-table">
+        <table className="data-table audit-table">
           <thead>
             <tr>
-              <th>Fecha</th>
-              <th>Origen</th>
-              <th>Acción</th>
-              <th>Referencia</th>
-              <th>Actor</th>
-              <th>Correlation</th>
+              <th style={{ width: 150 }}>Cuándo</th>
+              <th style={{ width: 90 }}>Origen</th>
+              <th style={{ width: 160 }}>Acción</th>
+              <th style={{ width: 180 }}>Referencia</th>
+              <th style={{ width: 200 }}>Actor</th>
+              <th style={{ width: 130 }}>Correlation</th>
               <th>Detalle</th>
             </tr>
           </thead>
@@ -270,10 +426,14 @@ export default function AdminAudit() {
             {filtered.length === 0 ? (
               <tr><td colSpan={7} className="state">Sin eventos con esos filtros</td></tr>
             ) : (
-              filtered.slice(0, 500).map((e) => (
+              filtered
+                .filter((e) => !expandedCorr || e.correlation_id === expandedCorr)
+                .slice(0, 500)
+                .map((e) => (
                 <tr key={e.id}>
-                  <td style={{ fontSize: '0.8125rem', whiteSpace: 'nowrap', color: 'var(--neutral-700)' }}>
-                    {fmtDate(e.when)}
+                  <td style={{ fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontWeight: 600, color: 'var(--neutral-800)' }}>{fmtDateTime(e.when)}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--neutral-500)' }}>{fmtRelative(e.when)}</div>
                   </td>
                   <td>
                     <span style={{
@@ -286,42 +446,10 @@ export default function AdminAudit() {
                     </span>
                   </td>
                   <td><ActionBadge action={e.action} /></td>
-                  <td style={{ fontSize: '0.8125rem' }}>
-                    {e.order_code ? (
-                      <span className="font-mono" style={{ fontWeight: 700, color: 'var(--brand-600)' }}>
-                        {e.order_code}
-                      </span>
-                    ) : (
-                      <span style={{ color: 'var(--neutral-500)' }}>{e.ref}</span>
-                    )}
-                  </td>
-                  <td style={{ fontSize: '0.8125rem', color: 'var(--neutral-600)' }}>
-                    {e.actor_id ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <User size={12} /> #{e.actor_id}
-                      </span>
-                    ) : <span style={{ color: 'var(--neutral-400)' }}>—</span>}
-                  </td>
-                  <td>
-                    {e.correlation_id ? (
-                      <code style={{
-                        fontSize: '0.7rem', background: 'var(--neutral-100)',
-                        padding: '2px 6px', borderRadius: 4, color: 'var(--neutral-600)',
-                      }} title={e.correlation_id}>
-                        {String(e.correlation_id).slice(0, 8)}…
-                      </code>
-                    ) : <span style={{ color: 'var(--neutral-400)' }}>—</span>}
-                  </td>
-                  <td style={{ maxWidth: 240, fontSize: '0.8125rem', color: 'var(--neutral-600)' }}>
-                    {e.details ? (
-                      <details>
-                        <summary style={{ cursor: 'pointer', fontSize: '0.75rem' }}>Ver detalle</summary>
-                        <div style={{ marginTop: 4, fontSize: '0.75rem', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
-                          {String(e.details).slice(0, 300)}
-                        </div>
-                      </details>
-                    ) : <span style={{ color: 'var(--neutral-400)' }}>—</span>}
-                  </td>
+                  <td>{renderRef(e)}</td>
+                  <td>{renderActor(e)}</td>
+                  <td>{renderCorrelation(e.correlation_id)}</td>
+                  <td style={{ maxWidth: 320 }}>{renderDetail(e)}</td>
                 </tr>
               ))
             )}

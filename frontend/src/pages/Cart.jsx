@@ -60,7 +60,7 @@ export default function Cart() {
   });
 
   return (
-    <main className="page-shell">
+    <main className="page-shell page-min">
       <div className="section-heading">
         <div>
           <span className="eyebrow">Compra en curso</span>

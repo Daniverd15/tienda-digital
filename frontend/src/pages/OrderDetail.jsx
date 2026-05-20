@@ -13,6 +13,7 @@ import {
 import api from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 import { OrderStatusBadge, PaymentStatusBadge } from '../components/Badge';
+import { fmtDateTime } from '../utils/datetime';
 
 const COP = (v) => `$${Number(v || 0).toLocaleString('es-CO')}`;
 
@@ -33,12 +34,6 @@ function statusIndex(status) {
     if (ORDER_STEPS[i].keys.includes(status)) return i;
   }
   return -1;
-}
-
-function fmtDate(d) {
-  if (!d) return '';
-  try { return new Date(d).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }); }
-  catch { return ''; }
 }
 
 function OrderTimeline({ order }) {
@@ -72,8 +67,8 @@ function OrderTimeline({ order }) {
                 {step.label}
               </strong>
               {active && <span style={{ color: 'var(--brand-600)' }}>Estado actual</span>}
-              {done && date && <span>{fmtDate(date)}</span>}
-              {active && date && <span>{fmtDate(date)}</span>}
+              {done && date && <span>{fmtDateTime(date)}</span>}
+              {active && date && <span>{fmtDateTime(date)}</span>}
             </div>
           </div>
         );
@@ -110,7 +105,7 @@ export default function OrderDetail() {
   );
 
   return (
-    <main className="page-shell">
+    <main className="page-shell page-min">
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
         <Link to="/mis-pedidos" style={{ color: 'var(--neutral-500)', fontSize: '0.875rem', textDecoration: 'none' }}>← Mis pedidos</Link>
       </div>

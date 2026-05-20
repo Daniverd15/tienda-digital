@@ -150,6 +150,30 @@ class OrderAuditLog(Base):
     order = relationship("Order", back_populates="audit")
 
 
+class FailedCheckoutAttempt(Base):
+    """Intento de checkout que NO termino en PAID.
+
+    En la version anterior estos casos se persistian como Order con estados
+    artificiales (PAGO_RECHAZADO, SIN_STOCK, PAGO_PENDIENTE). Como esos
+    estados no representan pedidos reales y contaminaban el panel admin y las
+    metricas financieras, ahora se guardan separados aqui solo para
+    trazabilidad y soporte (saber por que un cliente no pudo comprar).
+    """
+    __tablename__ = "failed_checkout_attempts"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    attempt_code = Column(String(40), nullable=False, index=True)
+    reason_code = Column(String(60), nullable=False)
+    # out_of_stock | payment_rejected | payment_unavailable |
+    # inventory_unavailable | inventory_error | payment_pending | payment_failed
+    message = Column(String(500), nullable=False)
+    subtotal = Column(Numeric(12, 2), nullable=False, default=0)
+    correlation_id = Column(String(64), nullable=True)
+    payload = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
 # -----------------------------------------------------------------------------
 # Reseñas
 # -----------------------------------------------------------------------------

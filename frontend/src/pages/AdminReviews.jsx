@@ -19,7 +19,8 @@ function StarRow({ rating }) {
 export default function AdminReviews() {
   const toast = useToast();
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all');
+  // Por defecto mostrar las PENDIENTES — son las que requieren accion del admin.
+  const [filter, setFilter] = useState('pending');
   const [reviews, setReviews] = useState([]);
 
   const { loading, error } = useAsync(async () => {

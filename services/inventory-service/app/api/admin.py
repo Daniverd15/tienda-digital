@@ -4,6 +4,7 @@ CRUD de variantes (con validacion contra Catalog), movimientos manuales y
 gestion de alertas de stock minimo.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
@@ -101,9 +102,32 @@ def create_variant(
     # exists == None -> Catalog caido, modo degradado, permitimos
     if db.query(ProductVariant).filter(ProductVariant.sku == payload.sku).first():
         raise HTTPException(409, f"Ya existe una variante con SKU={payload.sku}.")
+    # Validacion logica del combo (mensaje amigable antes de pegarle al UNIQUE)
+    combo_dup = (
+        db.query(ProductVariant)
+        .filter(
+            ProductVariant.product_id == payload.product_id,
+            ProductVariant.color == payload.color,
+            ProductVariant.size == payload.size,
+        )
+        .first()
+    )
+    if combo_dup:
+        raise HTTPException(
+            409,
+            f"Ya existe una variante para producto {payload.product_id} con color={payload.color or '∅'} y talla={payload.size or '∅'}. "
+            f"Editala (SKU {combo_dup.sku}) en vez de crear una nueva.",
+        )
     v = ProductVariant(**payload.model_dump())
     db.add(v)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        # Backup: por si dos requests concurrentes crean el mismo combo.
+        if "uq_variant_combo" in str(exc).lower() or "uq_variant_sku" in str(exc).lower():
+            raise HTTPException(409, "Variante duplicada (mismo combo o SKU).") from exc
+        raise
     db.refresh(v)
     return serialize_variant_internal(v)
 

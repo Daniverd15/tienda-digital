@@ -56,7 +56,7 @@ else
   warn "Respuesta tomo ${MS}ms (CB deberia ser <100ms; revisar)"
 fi
 
-step "HIPOTESIS 3: Checkout completo con CB abierto degrada a PAGO_PENDIENTE"
+step "HIPOTESIS 3: Checkout completo con CB abierto devuelve 503 (sin crear Order falsa)"
 CLIENT=$(login "e2e@cliente.com" "E2eTest1234*")
 CTOKEN=$(echo "$CLIENT" | extract_field access_token)
 if [ -z "$CTOKEN" ]; then
@@ -68,16 +68,16 @@ fi
 curl -s -o /dev/null -X DELETE "$API/cart" -H "Authorization: Bearer $CTOKEN"
 curl -s -o /dev/null -X POST "$API/cart/items" -H "Authorization: Bearer $CTOKEN" \
   -H "Content-Type: application/json" -d '{"variant_id":11,"quantity":1}'
-CK=$(curl -s -X POST "$API/checkout" -H "Authorization: Bearer $CTOKEN" \
+HTTP_CODE=$(curl -s -o /tmp/_ck_body -w "%{http_code}" -X POST "$API/checkout" \
+  -H "Authorization: Bearer $CTOKEN" \
   -H "Content-Type: application/json" -H "Idempotency-Key: lat-$(date +%s)" \
   -d '{"delivery_name":"E2E","delivery_address":"Calle 100 #20","delivery_city":"Bogota","billing_document":"1024","contact_phone":"3001112233","contact_email":"e2e@cliente.com"}')
-CK_STATUS=$(echo "$CK" | extract_field status)
-if [ "$CK_STATUS" = "PAGO_PENDIENTE" ]; then
-  ok "Orden degrada a PAGO_PENDIENTE (esperado con CB abierto)"
-elif [ "$CK_STATUS" = "PAID" ]; then
-  fail "ERROR: orden quedo PAID a pesar de tener CB abierto"
+CK_BODY=$(cat /tmp/_ck_body)
+CK_CODE=$(echo "$CK_BODY" | extract_field code)
+if [ "$HTTP_CODE" = "503" ] && [ "$CK_CODE" = "payment_unavailable" ]; then
+  ok "Checkout responde 503 payment_unavailable con CB abierto (degradacion graceful, sin Order)"
 else
-  warn "Orden quedo en estado: $CK_STATUS (esperaba PAGO_PENDIENTE)"
+  fail "Checkout deberia devolver 503/payment_unavailable; obtuvo http=$HTTP_CODE code=$CK_CODE"
 fi
 
 step "HIPOTESIS 4: Reset admin del CB"

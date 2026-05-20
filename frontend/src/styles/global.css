@@ -90,7 +90,20 @@ body {
   color: var(--neutral-900);
   background: var(--neutral-50);
   -webkit-font-smoothing: antialiased;
+  /* Sticky footer: layout column con el contenido como flex:1 para empujar el
+     footer al fondo cuando la página es corta (carrito, mis pedidos, etc.). */
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  flex: 1;
+}
+/* El <main> principal absorbe el espacio sobrante; el <footer> queda abajo. */
+main { flex: 1 0 auto; }
 
 a { color: inherit; }
 
@@ -2018,8 +2031,10 @@ textarea { resize: vertical; min-height: 80px; }
    Mejoras incrementales (review completa del frontend, mayo 2026)
    ───────────────────────────────────────────────────────────────────────── */
 
-/* Asegura que cualquier página con poca altura empuje el footer al final */
-.page-min { min-height: calc(100vh - var(--topbar-h, 64px) - 280px); }
+/* Asegura que cualquier página con poca altura empuje el footer al final.
+   topbar (~64px) + footer (~280px) → restamos eso. Si no alcanza, el min-height
+   garantiza que la "tarjeta" interna tenga 360px de aire al menos. */
+.page-min { min-height: calc(100vh - 360px); }
 
 /* Card overlays para "AGOTADO" / "Últimas X uds" */
 .card-badge {

@@ -1,21 +1,31 @@
 """Orquestador de la SAGA orquestada sincrona del checkout.
 
-Materializa el diagrama 11.0 del informe Fase 1:
-- Commerce crea Order(CREATED)
-- Llama a Inventory para reservar (REST con timeout)
-- Llama a Payment para autorizar (REST con timeout)
-- Segun resultado: confirma o libera la reserva (compensacion HTTP)
-- Marca el estado final de la orden y registra historia + auditoria
-- Notifica al cliente via SMTP (Mailhog)
+Materializa el diagrama 11.0 del informe Fase 1.
+
+Politica del MVP (revision mayo 2026):
+
+   La Order SOLO se persiste si el checkout termina en PAID.
+
+   Casos antes implementados como estados artificiales del pedido
+   (PAGO_RECHAZADO, PAGO_PENDIENTE, SIN_STOCK) ya no producen una fila en
+   `orders`. En su lugar:
+     - El cliente recibe un error HTTP claro (409 / 402 / 503).
+     - Los intentos fallidos quedan registrados como FailedCheckoutAttempt
+       (bitacora) para trazabilidad, sin contaminar el listado de pedidos
+       del admin ni inflar metricas financieras.
+     - La reserva de Inventory se libera siempre que aplica.
+
+Eso mantiene la SAGA orquestada y la compensacion HTTP (cumple bloque 6 del
+informe), pero entrega una UX mucho mas alineada a un ecommerce real.
 """
 import logging
-from decimal import Decimal
 from typing import TypedDict
 
 from sqlalchemy.orm import Session
 
 from app.models import (
     Cart,
+    FailedCheckoutAttempt,
     Notification,
     Order,
     OrderAuditLog,
@@ -25,6 +35,7 @@ from app.models import (
 from app.services.http_clients import (
     ServiceUnavailable,
     inventory_confirm,
+    inventory_get_variants_by_ids,
     inventory_release,
     inventory_reserve,
     payment_charge,
@@ -34,7 +45,7 @@ from app.services.mailer import send_email
 logger = logging.getLogger(__name__)
 
 
-class CheckoutResult(TypedDict):
+class CheckoutOK(TypedDict):
     order_id: int
     order_code: str
     status: str
@@ -43,26 +54,36 @@ class CheckoutResult(TypedDict):
     message: str
 
 
-def _transition(db: Session, order: Order, new_status: str, changed_by: int | None,
-                notes: str | None = None) -> None:
-    prev = order.status
-    order.status = new_status
-    db.add(OrderStatusHistory(
-        order_id=order.id, from_status=prev, to_status=new_status,
-        changed_by=changed_by, notes=notes,
+class CheckoutError(Exception):
+    """El checkout fallo de forma controlada. status_code es el codigo HTTP a
+    devolver al cliente; payload es el cuerpo JSON con la razon."""
+
+    def __init__(self, status_code: int, code: str, message: str,
+                 extra: dict | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.payload = {"code": code, "message": message, **(extra or {})}
+
+
+def _record_failure(db: Session, *, user_id: int, attempt_code: str,
+                    reason_code: str, message: str, subtotal: float,
+                    correlation_id: str | None, payload: str | None = None) -> None:
+    """Registra el intento fallido para auditoria sin crear una Order."""
+    db.add(FailedCheckoutAttempt(
+        user_id=user_id, attempt_code=attempt_code,
+        reason_code=reason_code, message=message[:500],
+        subtotal=subtotal, correlation_id=correlation_id,
+        payload=(payload or "")[:2000],
     ))
-
-
-def _audit(db: Session, order_id: int | None, action: str, performed_by: int | None,
-           details: str, correlation_id: str | None) -> None:
     db.add(OrderAuditLog(
-        order_id=order_id, action=action, performed_by=performed_by,
-        details=details[:2000], correlation_id=correlation_id,
+        order_id=None, action=f"checkout_failed_{reason_code}",
+        performed_by=user_id, details=message[:2000],
+        correlation_id=correlation_id,
     ))
 
 
-def _notify_user(db: Session, user_id: int, order_id: int | None, title: str, message: str,
-                 email: str | None = None) -> None:
+def _notify_user(db: Session, user_id: int, order_id: int | None, title: str,
+                 message: str, email: str | None = None) -> None:
     db.add(Notification(user_id=user_id, order_id=order_id, title=title, message=message))
     if email:
         send_email(email, title, message)
@@ -70,137 +91,192 @@ def _notify_user(db: Session, user_id: int, order_id: int | None, title: str, me
 
 def execute_checkout(
     db: Session,
+    *,
     cart: Cart,
-    order: Order,
     user_id: int,
     token: str,
     correlation_id: str,
+    delivery_name: str,
+    delivery_address: str,
+    delivery_city: str,
+    billing_document: str,
+    contact_phone: str,
+    contact_email: str,
     card_token: str | None,
-) -> CheckoutResult:
-    """Ejecuta la SAGA orquestada sincrona. Asume que la orden ya esta creada en CREATED.
+    attempt_code: str,
+    subtotal: float,
+    total: float,
+) -> CheckoutOK:
+    """Ejecuta la SAGA y devuelve el resultado.
 
-    Itera por los items del carrito, reserva en Inventory, autoriza el pago,
-    confirma o libera segun resultado. Persiste TODO en la misma transaccion
-    de Commerce y deja la orden en su estado final.
+    Lanza `CheckoutError` con codigo HTTP claro si el flujo no llega a PAID.
+    NO crea Order salvo que el pago sea APPROVED.
     """
     items_payload = [{"variant_id": i.variant_id, "quantity": i.quantity} for i in cart.items]
+    if not items_payload:
+        raise CheckoutError(400, "cart_empty", "Tu carrito esta vacio.")
 
-    # 1. RESERVAR
+    # ─── 1. RESERVAR INVENTARIO ─────────────────────────────────────────────
     try:
-        resp = inventory_reserve(order.order_code, items_payload, token, correlation_id)
+        resp = inventory_reserve(attempt_code, items_payload, token, correlation_id)
     except ServiceUnavailable as exc:
-        logger.error("Reserve fallo: %s", exc)
-        _transition(db, order, "SIN_STOCK", user_id, "Inventory no disponible")
-        _audit(db, order.id, "checkout_reserve_unavailable", user_id, str(exc), correlation_id)
-        _notify_user(db, user_id, order.id, "No pudimos confirmar tu pedido",
-                     f"Servicio de inventario temporalmente no disponible. Reintenta en unos minutos."
-                     f"\nCodigo: {order.order_code}",
-                     email=order.contact_email)
+        _record_failure(db, user_id=user_id, attempt_code=attempt_code,
+                        reason_code="inventory_unavailable",
+                        message=f"Inventory no respondio: {exc}",
+                        subtotal=subtotal, correlation_id=correlation_id)
         db.commit()
-        return CheckoutResult(order_id=order.id, order_code=order.order_code,
-                              status=order.status, payment_status=order.payment_status,
-                              total=float(order.total),
-                              message="Inventario no disponible. Reintenta en unos minutos.")
+        raise CheckoutError(
+            503, "inventory_unavailable",
+            "El servicio de inventario no está disponible. Intenta de nuevo en unos minutos."
+        ) from exc
 
     if resp["status_code"] == 409:
-        detail = resp["body"].get("detail") if isinstance(resp["body"], dict) else None
-        _transition(db, order, "SIN_STOCK", user_id, f"Reserva fallo: {detail}")
-        _audit(db, order.id, "checkout_no_stock", user_id, str(detail), correlation_id)
-        _notify_user(db, user_id, order.id, "Producto sin stock",
-                     f"Lo sentimos, alguna(s) variantes de tu pedido {order.order_code} ya no tienen stock.",
-                     email=order.contact_email)
+        body = resp["body"] if isinstance(resp["body"], dict) else {}
+        unavailable = (body.get("detail") or {}).get("unavailable") if isinstance(body.get("detail"), dict) else None
+        msg = "Uno o más productos del carrito ya no tienen stock suficiente."
+        _record_failure(db, user_id=user_id, attempt_code=attempt_code,
+                        reason_code="out_of_stock", message=msg,
+                        subtotal=subtotal, correlation_id=correlation_id,
+                        payload=str(body)[:1000])
         db.commit()
-        return CheckoutResult(order_id=order.id, order_code=order.order_code,
-                              status="SIN_STOCK", payment_status=order.payment_status,
-                              total=float(order.total),
-                              message="No hay stock suficiente para uno o mas productos.")
+        raise CheckoutError(409, "out_of_stock", msg, {"unavailable": unavailable})
+
     if resp["status_code"] not in (200, 201):
-        _transition(db, order, "SIN_STOCK", user_id, f"Reserve respondio {resp['status_code']}")
-        _audit(db, order.id, "checkout_reserve_error", user_id, str(resp), correlation_id)
+        msg = f"Inventory respondio {resp['status_code']} al reservar."
+        _record_failure(db, user_id=user_id, attempt_code=attempt_code,
+                        reason_code="inventory_error", message=msg,
+                        subtotal=subtotal, correlation_id=correlation_id,
+                        payload=str(resp.get("body", ""))[:1000])
         db.commit()
-        return CheckoutResult(order_id=order.id, order_code=order.order_code,
-                              status="SIN_STOCK", payment_status=order.payment_status,
-                              total=float(order.total),
-                              message="Error al reservar inventario.")
+        raise CheckoutError(502, "inventory_error",
+                            "No fue posible reservar inventario. Intenta de nuevo.")
 
-    _transition(db, order, "AWAITING_PAYMENT", user_id, "Stock reservado")
-
-    # 2. PAGAR
+    # ─── 2. COBRAR ──────────────────────────────────────────────────────────
     try:
-        pay = payment_charge(order.order_code, float(order.total), order.currency,
-                             token, card_token=card_token, correlation_id=correlation_id)
+        pay = payment_charge(attempt_code, total, "COP", token,
+                             card_token=card_token, correlation_id=correlation_id)
     except ServiceUnavailable as exc:
-        logger.warning("Payment no disponible: %s", exc)
-        order.payment_status = "PENDING"
-        order.payment_message = "Pasarela no disponible; reintenta mas tarde."
-        _transition(db, order, "PAGO_PENDIENTE", user_id, "Payment service no respondio")
-        _audit(db, order.id, "payment_unavailable", user_id, str(exc), correlation_id)
-        _notify_user(db, user_id, order.id, "Pago pendiente",
-                     f"Tu pedido {order.order_code} quedo en PAGO PENDIENTE; reintenta en unos minutos.",
-                     email=order.contact_email)
+        # Compensacion: liberar el stock reservado.
+        inventory_release(attempt_code, "payment_service_unavailable", token, correlation_id)
+        _record_failure(db, user_id=user_id, attempt_code=attempt_code,
+                        reason_code="payment_unavailable",
+                        message=f"Pasarela no disponible: {exc}",
+                        subtotal=subtotal, correlation_id=correlation_id)
         db.commit()
-        return CheckoutResult(order_id=order.id, order_code=order.order_code,
-                              status="PAGO_PENDIENTE", payment_status="PENDING",
-                              total=float(order.total),
-                              message="Servicio de pagos no disponible.")
+        raise CheckoutError(
+            503, "payment_unavailable",
+            "La pasarela de pagos no está disponible en este momento. "
+            "Tu carrito quedó intacto; intenta de nuevo en unos minutos."
+        ) from exc
 
     body = pay["body"] if isinstance(pay["body"], dict) else {}
     pay_status = body.get("status", "FAILED")
-    order.payment_id = body.get("payment_id")
-    order.payment_reference = body.get("transaction_reference")
-    order.payment_message = (body.get("message") or "")[:250]
+    payment_id = body.get("payment_id")
+    payment_reference = body.get("transaction_reference")
+    payment_message = (body.get("message") or "")[:250]
 
-    if pay_status == "APPROVED":
-        # 3a. CONFIRMAR EN INVENTORY
-        ok = inventory_confirm(order.order_code, token, correlation_id)
-        if not ok:
-            # caso raro: pago aprobado pero confirm fallo. Mantenemos PAID; el scheduler
-            # de inventory liberara la reserva al expirar y un admin debera revisar.
-            _audit(db, order.id, "confirm_after_paid_failed", user_id,
-                   "Inventory confirm fallo; reserva vencera y stock no bajara correctamente.",
-                   correlation_id)
-        order.payment_status = "APPROVED"
-        _transition(db, order, "PAID", user_id, "Pago aprobado y stock descontado")
-        _audit(db, order.id, "payment_approved", user_id,
-               f"ref={order.payment_reference}", correlation_id)
-        _notify_user(db, user_id, order.id, "Compra exitosa",
-                     f"Tu pedido {order.order_code} fue pagado con exito.\n"
-                     f"Total: {float(order.total):,.0f} {order.currency}\n"
-                     f"Te avisaremos cuando se prepare y se despache.",
-                     email=order.contact_email)
-        cart.status = "checked_out"
+    # Caso "Circuit Breaker abierto" → Payment devuelve 503
+    if pay["status_code"] == 503:
+        inventory_release(attempt_code, "payment_circuit_open", token, correlation_id)
+        _record_failure(db, user_id=user_id, attempt_code=attempt_code,
+                        reason_code="payment_circuit_open",
+                        message="Circuit Breaker de la pasarela esta OPEN.",
+                        subtotal=subtotal, correlation_id=correlation_id)
         db.commit()
-        return CheckoutResult(order_id=order.id, order_code=order.order_code,
-                              status="PAID", payment_status="APPROVED",
-                              total=float(order.total),
-                              message="Pago aprobado. Compra confirmada.")
+        raise CheckoutError(
+            503, "payment_unavailable",
+            "La pasarela está temporalmente fuera de servicio (modo protegido). "
+            "Intenta en unos minutos."
+        )
 
     if pay_status == "REJECTED":
-        # 3b. LIBERAR RESERVA (compensacion)
-        inventory_release(order.order_code, "payment_rejected", token, correlation_id)
-        order.payment_status = "REJECTED"
-        _transition(db, order, "PAGO_RECHAZADO", user_id, "Pago rechazado por la pasarela")
-        _audit(db, order.id, "payment_rejected", user_id,
-               order.payment_message or "", correlation_id)
-        _notify_user(db, user_id, order.id, "Pago rechazado",
-                     f"Tu pago para el pedido {order.order_code} fue rechazado por la pasarela.\n"
-                     f"Razon: {order.payment_message}. Puedes reintentar con otro metodo.",
-                     email=order.contact_email)
+        # Compensacion + bitacora; NO se crea Order.
+        inventory_release(attempt_code, "payment_rejected", token, correlation_id)
+        _record_failure(db, user_id=user_id, attempt_code=attempt_code,
+                        reason_code="payment_rejected",
+                        message=f"Pago rechazado: {payment_message}",
+                        subtotal=subtotal, correlation_id=correlation_id,
+                        payload=str(body)[:1000])
+        # Notificacion in-app + correo (sin order_id porque no existe)
+        _notify_user(db, user_id, None, "Pago rechazado",
+                     f"Tu pago no fue aprobado por la pasarela. Razón: {payment_message or 'sin detalle'}. "
+                     "Puedes intentar de nuevo con otro método.",
+                     email=contact_email)
         db.commit()
-        return CheckoutResult(order_id=order.id, order_code=order.order_code,
-                              status="PAGO_RECHAZADO", payment_status="REJECTED",
-                              total=float(order.total), message="Pago rechazado.")
+        raise CheckoutError(
+            402, "payment_rejected",
+            payment_message or "El pago fue rechazado por la pasarela. Intenta con otro método.",
+        )
 
-    # PENDING o FAILED: NO liberamos reserva todavia (espera de scheduler / reconciliacion)
-    order.payment_status = pay_status
-    _transition(db, order, "PAGO_PENDIENTE", user_id, f"Pago {pay_status}")
-    _audit(db, order.id, "payment_pending_or_failed", user_id, str(body), correlation_id)
-    _notify_user(db, user_id, order.id, "Pago pendiente",
-                 f"Tu pago para el pedido {order.order_code} quedo en estado {pay_status}.\n"
-                 f"Te avisaremos cuando se resuelva.",
-                 email=order.contact_email)
+    if pay_status not in ("APPROVED",):
+        # PENDING / FAILED del mock → tratamos como no aprobado: compensamos y avisamos.
+        inventory_release(attempt_code, f"payment_{pay_status.lower()}", token, correlation_id)
+        _record_failure(db, user_id=user_id, attempt_code=attempt_code,
+                        reason_code=f"payment_{pay_status.lower()}",
+                        message=f"Pago en estado {pay_status}",
+                        subtotal=subtotal, correlation_id=correlation_id,
+                        payload=str(body)[:1000])
+        db.commit()
+        raise CheckoutError(
+            502, "payment_not_approved",
+            f"La pasarela devolvió estado {pay_status}. Intenta de nuevo.",
+        )
+
+    # ─── 3. PAGO APROBADO: AHORA SI CREAMOS LA ORDER ────────────────────────
+    # Snapshot del costo unitario (para COGS y margenes)
+    variant_ids = list({i.variant_id for i in cart.items})
+    cost_map = inventory_get_variants_by_ids(variant_ids)
+
+    order = Order(
+        order_code=attempt_code, user_id=user_id, status="PAID",
+        payment_status="APPROVED", payment_id=payment_id,
+        payment_reference=payment_reference, payment_message=payment_message,
+        subtotal=subtotal, additional_costs=0, discount=0, total=total, currency="COP",
+        delivery_name=delivery_name, delivery_address=delivery_address,
+        delivery_city=delivery_city, billing_document=billing_document,
+        contact_phone=contact_phone, contact_email=contact_email,
+        correlation_id=correlation_id,
+    )
+    db.add(order)
+    db.flush()
+
+    for it in cart.items:
+        info = cost_map.get(it.variant_id, {})
+        unit_cost = float(info.get("cost") or 0)
+        db.add(OrderItem(
+            order_id=order.id, variant_id=it.variant_id, product_id=it.product_id,
+            product_name=it.product_name, variant_description=it.variant_description,
+            image_url=it.image_url, quantity=it.quantity,
+            unit_price=float(it.unit_price),
+            unit_cost=unit_cost,
+            total=float(it.unit_price) * it.quantity,
+        ))
+
+    db.add(OrderStatusHistory(order_id=order.id, from_status=None, to_status="PAID",
+                              changed_by=user_id, notes="Checkout exitoso (SAGA OK)"))
+    db.add(OrderAuditLog(order_id=order.id, action="payment_approved",
+                         performed_by=user_id,
+                         details=f"ref={payment_reference}", correlation_id=correlation_id))
+
+    # Confirmar inventario (descuenta el stock fisico)
+    ok = inventory_confirm(attempt_code, token, correlation_id)
+    if not ok:
+        db.add(OrderAuditLog(order_id=order.id, action="confirm_after_paid_failed",
+                             performed_by=user_id,
+                             details="Inventory confirm fallo tras PAID; reserva vencera y stock no bajara.",
+                             correlation_id=correlation_id))
+
+    # Notificacion + correo
+    _notify_user(db, user_id, order.id, "Compra exitosa",
+                 f"Tu pedido {order.order_code} fue pagado con éxito.\n"
+                 f"Total: ${float(order.total):,.0f} {order.currency}\n"
+                 f"Te avisaremos cuando lo preparemos y despachemos.",
+                 email=contact_email)
+    cart.status = "checked_out"
     db.commit()
-    return CheckoutResult(order_id=order.id, order_code=order.order_code,
-                          status="PAGO_PENDIENTE", payment_status=pay_status,
-                          total=float(order.total),
-                          message=f"Pago {pay_status}. Quedo en revision.")
+    return CheckoutOK(
+        order_id=order.id, order_code=order.order_code,
+        status="PAID", payment_status="APPROVED",
+        total=float(order.total),
+        message="Pago aprobado. Compra confirmada.",
+    )

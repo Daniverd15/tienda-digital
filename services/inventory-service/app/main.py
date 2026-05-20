@@ -76,6 +76,34 @@ def soft_migrate() -> None:
             logger.info("Migracion suave: agregada columna product_variants.color_hex")
         except Exception:  # noqa: BLE001
             pass  # columna ya existe
+        # Antes de agregar el UNIQUE (product_id,color,size) debemos limpiar
+        # duplicados existentes para que no falle el ALTER.
+        try:
+            conn.execute(text("""
+                UPDATE product_variants v
+                JOIN (
+                    SELECT MIN(id) AS keep_id, product_id, color, size
+                    FROM product_variants
+                    GROUP BY product_id, color, size
+                    HAVING COUNT(*) > 1
+                ) d
+                  ON v.product_id = d.product_id
+                 AND (v.color <=> d.color)
+                 AND (v.size  <=> d.size)
+                 AND v.id <> d.keep_id
+                SET v.active = 0,
+                    v.sku = CONCAT(v.sku, '-DUP', v.id)
+            """))
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            conn.execute(text(
+                "ALTER TABLE product_variants ADD CONSTRAINT uq_variant_combo "
+                "UNIQUE (product_id, color, size)"
+            ))
+            logger.info("Migracion suave: agregado UNIQUE (product_id,color,size)")
+        except Exception:  # noqa: BLE001
+            pass  # constraint ya existe
 
 
 @asynccontextmanager

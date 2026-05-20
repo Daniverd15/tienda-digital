@@ -63,6 +63,8 @@ step "7. Carrito vacio al inicio"
 CART=$(curl -s "$API/cart" -H "Authorization: Bearer $CLIENT_TOKEN")
 ITEM_COUNT=$(echo "$CART" | python -c "import sys,json;print(json.load(sys.stdin)['item_count'])" 2>/dev/null)
 assert_eq "$ITEM_COUNT" "0" "Carrito recien creado tiene 0 items"
+# Snapshot del stock previo al checkout (para verificar la baja real)
+PRE_AVAIL=$(curl -s "$API/inventory/variants/1" | python -c "import sys,json;print(json.load(sys.stdin)['available'])")
 
 step "8. Agregar 2 productos al carrito"
 curl -s -o /dev/null -X POST "$API/cart/items" \
@@ -98,22 +100,26 @@ assert_eq "$ORDER_STATUS" "PAID" "Orden quedo en estado PAID tras APPROVED"
 assert_eq "$PAY_STATUS" "APPROVED" "Pago aprobado"
 info "Order ID: $ORDER_ID  /  Code: $ORDER_CODE"
 
-step "10. Stock real bajo en Inventory (CAM-NEG-S de 8 a 6)"
+step "10. Stock real bajo en Inventory tras checkout"
+# Snapshot pre-checkout esta en $PRE_AVAIL (capturado en paso 7). Verificamos
+# que el stock haya bajado en >= la cantidad comprada (2 unidades).
 VAR1=$(curl -s "$API/inventory/variants/1")
 AVAIL=$(echo "$VAR1" | python -c "import sys,json;print(json.load(sys.stdin)['available'])")
-if [ "$AVAIL" -le 8 ]; then
-  ok "Variante 1 available=$AVAIL (bajo desde 8)"
+DROP=$(( PRE_AVAIL - AVAIL ))
+if [ "$DROP" -ge 2 ]; then
+  ok "Variante 1 available=$AVAIL (bajo ${DROP} unidades desde ${PRE_AVAIL})"
 else
-  fail "Stock no bajo, available=$AVAIL"
+  fail "Stock no bajo lo suficiente: pre=$PRE_AVAIL post=$AVAIL drop=$DROP"
 fi
 
 step "11. /orders/mine trae la orden recien creada"
 MINE=$(curl -s "$API/orders/mine" -H "Authorization: Bearer $CLIENT_TOKEN")
 assert_contains "$MINE" "\"order_code\":\"$ORDER_CODE\"" "Pedido aparece en historial"
 
-step "12. /orders/{id} trae historia con AWAITING_PAYMENT -> PAID"
+step "12. /orders/{id} trae historia con paso a PAID"
+# Politica del MVP: la Order solo se persiste si el checkout llega a PAID,
+# asi que el historial arranca directo en PAID (sin estados intermedios).
 DETAIL_ORDER=$(curl -s "$API/orders/$ORDER_ID" -H "Authorization: Bearer $CLIENT_TOKEN")
-assert_contains "$DETAIL_ORDER" "AWAITING_PAYMENT" "History incluye AWAITING_PAYMENT"
 assert_contains "$DETAIL_ORDER" "\"to_status\":\"PAID\"" "History incluye paso a PAID"
 
 step "13. Notificaciones del cliente"
@@ -141,16 +147,17 @@ REVIEW=$(curl -s -X POST "$API/reviews" \
   -H "Content-Type: application/json" \
   -d "{\"product_id\":1,\"order_id\":$ORDER_ID,\"rating\":5,\"comment\":\"E2E test review\"}")
 REVIEW_ID=$(echo "$REVIEW" | extract_field id)
-[ -n "$REVIEW_ID" ] && ok "Resena creada id=$REVIEW_ID" || fail "Resena fallo: $REVIEW"
+[ -n "$REVIEW_ID" ] && ok "Resena creada id=$REVIEW_ID (pendiente de aprobacion)" || fail "Resena fallo: $REVIEW"
 
-step "16. Catalog refleja el rating en su Cache-Aside"
+step "16. Admin aprueba la resena y Catalog refleja el rating en su Cache-Aside"
+curl -s -o /dev/null -X PATCH "$API/admin/reviews/$REVIEW_ID/approve" -H "Authorization: Bearer $ADMIN_TOKEN"
 sleep 1
 P1=$(curl -s "$API/products/1")
 RAT=$(echo "$P1" | python -c "import sys,json;d=json.load(sys.stdin);print(d['average_rating'])")
 if [ "$(python -c "print(float('$RAT') >= 1.0)")" = "True" ]; then
-  ok "Catalog tiene rating=$RAT (>= 1)"
+  ok "Catalog tiene rating=$RAT tras aprobacion admin (>= 1)"
 else
-  fail "Catalog rating=$RAT no se actualizo"
+  fail "Catalog rating=$RAT no se actualizo tras aprobacion"
 fi
 
 step "17. Casos negativos"

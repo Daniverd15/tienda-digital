@@ -59,9 +59,10 @@ export default function AdminOrders() {
 
   const { data: orders = [], loading, error, setData, refetch } = useAsync(async () => {
     const { data } = await api.get('/admin/orders');
-    // Solo mostramos pedidos con estados "operativos" en el panel admin.
-    // Los rechazados / pendientes / sin stock siguen registrados en DB y se
-    // consultan via la bitacora de auditoria, no en este listado.
+    // Filtro defensivo: con la nueva politica del MVP la SAGA solo persiste
+    // pedidos en estados operativos. Filtramos por si quedaron filas
+    // historicas (PAGO_RECHAZADO/SIN_STOCK/PAGO_PENDIENTE) de versiones
+    // anteriores que conviene esconder del listado de admin.
     return (data || []).filter((o) => OPERATIONAL_STATUSES.has(o.status));
   }, []);
 

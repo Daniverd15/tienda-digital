@@ -3,13 +3,9 @@ import { Bell, Package, ShoppingBag, ChevronRight } from 'lucide-react';
 import api from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 import { OrderStatusBadge, PaymentStatusBadge } from '../components/Badge';
+import { fmtDate } from '../utils/datetime';
 
 const COP = (v) => `$${Number(v || 0).toLocaleString('es-CO')}`;
-
-function fmtDate(d) {
-  try { return new Date(d).toLocaleDateString('es-CO', { dateStyle: 'medium' }); }
-  catch { return ''; }
-}
 
 export default function MyOrders() {
   const { data: orders = [], loading, error } = useAsync(async () => {

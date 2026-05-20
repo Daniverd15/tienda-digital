@@ -30,10 +30,20 @@ class TimestampMixin:
 
 
 class ProductVariant(Base, TimestampMixin):
-    """SKU con stock, costo y precio. La fuente de verdad del inventario."""
+    """SKU con stock, costo y precio. La fuente de verdad del inventario.
+
+    Restricciones:
+    - SKU unico (global).
+    - (product_id, color, size) unico para evitar duplicados visibles al
+      cliente. NULL en color o size se permite (un producto sin variantes de
+      color, p.ej. una mochila, tendra solo una fila con color y size NULL).
+    """
 
     __tablename__ = "product_variants"
-    __table_args__ = (UniqueConstraint("sku", name="uq_variant_sku"),)
+    __table_args__ = (
+        UniqueConstraint("sku", name="uq_variant_sku"),
+        UniqueConstraint("product_id", "color", "size", name="uq_variant_combo"),
+    )
 
     id = Column(Integer, primary_key=True)
     product_id = Column(Integer, nullable=False, index=True)  # ref logica a Catalog

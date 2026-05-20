@@ -86,18 +86,37 @@ export default function ProductDetail() {
     return Array.from(map.values());
   }, [data]);
 
+  const hasSizesGlobal = (data?.product?.variants || []).some((v) => v.size);
+
   // Auto-seleccionar el primer color con stock al cargar
   useEffect(() => {
     if (!data?.product || selectedColor) return;
     const firstWithStock = groupedByColor.find((g) =>
       g.sizes.some((s) => variantStock(s) > 0),
     );
-    if (firstWithStock) {
-      setSelectedColor(firstWithStock.key);
-    } else if (groupedByColor.length > 0) {
-      setSelectedColor(groupedByColor[0].key);
+    const targetGroup = firstWithStock || groupedByColor[0];
+    if (targetGroup) {
+      setSelectedColor(targetGroup.key);
+      // Si el producto NO tiene tallas, una variante = un color. Auto-seleccionamos
+      // la variant_id directamente para que el botón "Agregar al carrito" funcione.
+      if (!hasSizesGlobal) {
+        const v = targetGroup.sizes.find((s) => variantStock(s) > 0) || targetGroup.sizes[0];
+        if (v) setVariantId(String(v.id));
+      }
     }
-  }, [data, groupedByColor, selectedColor]);
+  }, [data, groupedByColor, selectedColor, hasSizesGlobal]);
+
+  // Al cambiar de color: si NO hay tallas, autoseleccionar la unica variante del color
+  const selectColor = (group) => {
+    setSelectedColor(group.key);
+    setQuantity(1);
+    if (!hasSizesGlobal) {
+      const v = group.sizes.find((s) => variantStock(s) > 0) || group.sizes[0];
+      setVariantId(v ? String(v.id) : '');
+    } else {
+      setVariantId('');
+    }
+  };
 
   const selectedColorGroup = groupedByColor.find((g) => g.key === selectedColor);
   const selectedVariant = useMemo(
@@ -214,7 +233,7 @@ export default function ProductDetail() {
                       disabled={!someInStock}
                       className={`color-swatch${selected ? ' selected' : ''}${!someInStock ? ' out' : ''}`}
                       style={{ background: g.color_hex }}
-                      onClick={() => { setSelectedColor(g.key); setVariantId(''); setQuantity(1); }}
+                      onClick={() => selectColor(g)}
                     />
                   );
                 })}

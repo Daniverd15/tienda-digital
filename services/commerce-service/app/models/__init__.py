@@ -3,6 +3,7 @@ from app.models.entities import (
     CartItem,
     Employee,
     Expense,
+    FailedCheckoutAttempt,
     Notification,
     Order,
     OrderAuditLog,
@@ -14,6 +15,7 @@ from app.models.entities import (
 __all__ = [
     "Cart", "CartItem",
     "Order", "OrderItem", "OrderStatusHistory", "OrderAuditLog",
+    "FailedCheckoutAttempt",
     "Review", "Notification",
     "Employee", "Expense",
 ]

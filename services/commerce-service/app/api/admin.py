@@ -11,10 +11,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
-from app.core.deps import current_user_id, get_correlation_id, require_admin
+from app.core.deps import current_user_id, get_correlation_id, get_current_user_token, require_admin
 from app.models import (
     Employee,
     Expense,
+    FailedCheckoutAttempt,
     Notification,
     Order,
     OrderAuditLog,
@@ -35,6 +36,7 @@ from app.schemas import (
     ReviewPublic,
 )
 from app.api.orders import _serialize_order
+from app.services.http_clients import catalog_update_rating
 from app.services.mailer import send_email
 
 
@@ -331,25 +333,60 @@ def admin_list_reviews(
     return q.order_by(Review.id.desc()).limit(500).all()
 
 
+def _recalc_and_push_rating(db: Session, product_id: int, token: str,
+                            correlation_id: str | None) -> None:
+    """Recalcula promedio + count de reseñas aprobadas y notifica al Catalog."""
+    rows = (
+        db.query(Review)
+        .filter(Review.product_id == product_id, Review.approved.is_(True))
+        .all()
+    )
+    if not rows:
+        avg, count = 0.0, 0
+    else:
+        avg = round(sum(r.rating for r in rows) / len(rows), 2)
+        count = len(rows)
+    catalog_update_rating(product_id, avg, count, token=token, correlation_id=correlation_id)
+
+
 @router.patch("/reviews/{review_id}/approve", response_model=ApiMessage)
-def approve_review(review_id: int, _: dict = Depends(require_admin),
-                   db: Session = Depends(get_db)):
+def approve_review(
+    review_id: int,
+    _: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+    token: str = Depends(get_current_user_token),
+    correlation_id: str = Depends(get_correlation_id),
+):
     r = db.query(Review).filter(Review.id == review_id).first()
     if not r:
         raise HTTPException(404, "Resena no encontrada.")
+    if r.approved:
+        return ApiMessage(message="Resena ya aprobada.")
     r.approved = True
     db.commit()
-    return ApiMessage(message="Resena aprobada.")
+    # Notifica al Catalog para que recalcule el RatingSummary
+    _recalc_and_push_rating(db, r.product_id, token, correlation_id)
+    return ApiMessage(message="Resena aprobada y publicada.")
 
 
 @router.delete("/reviews/{review_id}", response_model=ApiMessage)
-def delete_review(review_id: int, _: dict = Depends(require_admin),
-                  db: Session = Depends(get_db)):
+def delete_review(
+    review_id: int,
+    _: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+    token: str = Depends(get_current_user_token),
+    correlation_id: str = Depends(get_correlation_id),
+):
     r = db.query(Review).filter(Review.id == review_id).first()
     if not r:
         raise HTTPException(404, "Resena no encontrada.")
+    was_approved = r.approved
+    product_id = r.product_id
     db.delete(r)
     db.commit()
+    # Si la resena estaba aprobada, recalcular el rating para descontarla.
+    if was_approved:
+        _recalc_and_push_rating(db, product_id, token, correlation_id)
     return ApiMessage(message="Resena eliminada.")
 
 
@@ -369,3 +406,59 @@ def list_audit_logs(
     if order_id:
         q = q.filter(OrderAuditLog.order_id == order_id)
     return q.order_by(OrderAuditLog.id.desc()).limit(limit).all()
+
+
+# -----------------------------------------------------------------------------
+# Checkout attempts fallidos (no son pedidos pero quedan para soporte)
+# -----------------------------------------------------------------------------
+
+
+@router.get("/checkout/failed")
+def list_failed_attempts(
+    days: int = Query(default=30, ge=1, le=365),
+    reason: str | None = Query(default=None),
+    limit: int = Query(default=200, le=1000),
+    _: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Intentos de checkout que NO terminaron en PAID. Permite a soporte
+    entender por que un cliente no pudo comprar (sin stock, pago rechazado,
+    pasarela caida, etc.)."""
+    from datetime import timedelta
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    q = db.query(FailedCheckoutAttempt).filter(FailedCheckoutAttempt.created_at >= cutoff)
+    if reason:
+        q = q.filter(FailedCheckoutAttempt.reason_code == reason)
+    rows = q.order_by(FailedCheckoutAttempt.id.desc()).limit(limit).all()
+    return [
+        {
+            "id": r.id,
+            "user_id": r.user_id,
+            "attempt_code": r.attempt_code,
+            "reason_code": r.reason_code,
+            "message": r.message,
+            "subtotal": float(r.subtotal or 0),
+            "correlation_id": r.correlation_id,
+            "created_at": r.created_at,
+        }
+        for r in rows
+    ]
+
+
+# -----------------------------------------------------------------------------
+# Mantenimiento
+# -----------------------------------------------------------------------------
+
+
+@router.post("/maintenance/backfill-costs", response_model=ApiMessage)
+def trigger_backfill(_: dict = Depends(require_admin)):
+    """Re-ejecuta el backfill de unit_cost contra Inventory.
+
+    Llama al servicio de Inventory para obtener el costo actual de cada
+    variante referenciada en OrderItem con unit_cost=0 y lo persiste. Se
+    ejecuta automaticamente al startup pero se expone aqui para uso manual
+    desde el panel admin (ej. si Inventory estaba caido al boot).
+    """
+    from app.main import backfill_unit_cost
+    n = backfill_unit_cost()
+    return ApiMessage(message=f"Backfill completado: {n} order_items actualizados.")
