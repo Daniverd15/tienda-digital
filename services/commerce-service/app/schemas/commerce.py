@@ -201,14 +201,29 @@ class ExpensePublic(BaseModel):
     created_at: datetime
 
 
+class FinanceTimeseriesPoint(BaseModel):
+    label: str         # ej. "2026-05-19", "2026-05", "2026"
+    gross_sales: float
+    cogs: float
+    orders_count: int
+    gross_margin: float    # gross_sales - cogs
+
+
 class FinanceSummary(BaseModel):
     period_from: date | None
     period_to: date | None
+    granularity: str = "month"
     gross_sales: float
     orders_count: int
+    cogs: float = 0
+    gross_margin: float = 0       # gross_sales - cogs (margen bruto)
+    gross_margin_pct: float = 0   # gross_margin / gross_sales * 100
     operating_expenses: float
     payroll: float
-    net_profit: float
+    net_profit: float             # gross_margin - operating_expenses - payroll
+    net_margin_pct: float = 0     # net_profit / gross_sales * 100
+    timeseries: list[FinanceTimeseriesPoint] = []
+    avg_ticket: float = 0         # gross_sales / orders_count
 
 
 class OrderAuditLogPublic(BaseModel):

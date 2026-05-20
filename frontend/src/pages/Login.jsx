@@ -19,7 +19,13 @@ export default function Login() {
       const user = await login(form);
       toast(`Bienvenido, ${user.name}!`, 'success');
       const fallback = user.role === 'admin' ? '/admin' : '/catalogo';
-      navigate(location.state?.from?.pathname || fallback, { replace: true });
+      const intended = location.state?.from?.pathname;
+      // Si el admin venia de una ruta del lado cliente, mejor llevarlo
+      // directo al panel admin en vez de a mis-pedidos / carrito / etc.
+      const target = user.role === 'admin' && intended && !intended.startsWith('/admin')
+        ? '/admin'
+        : (intended || fallback);
+      navigate(target, { replace: true });
     } catch (err) {
       toast(err.response?.data?.detail || 'Credenciales incorrectas.', 'error', 'Error de acceso');
     } finally {
@@ -72,8 +78,8 @@ export default function Login() {
         <div className="auth-divider">Credenciales de prueba</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
           {[
-            { label: 'Cliente',       email: 'cliente@tienda.com', pw: 'Cliente123*' },
-            { label: 'Administrador', email: 'admin@tienda.com',   pw: 'Admin123*' },
+            { label: 'Cliente',       email: 'cliente@tienda.com', pw: 'Cliente1234*' },
+            { label: 'Administrador', email: 'admin@tienda.com',   pw: 'Admin1234*' },
           ].map((cred) => (
             <button
               key={cred.label}

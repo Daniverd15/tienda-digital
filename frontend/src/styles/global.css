@@ -2013,3 +2013,190 @@ textarea { resize: vertical; min-height: 80px; }
   .features-row { grid-template-columns: 1fr; }
   .category-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Mejoras incrementales (review completa del frontend, mayo 2026)
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Asegura que cualquier página con poca altura empuje el footer al final */
+.page-min { min-height: calc(100vh - var(--topbar-h, 64px) - 280px); }
+
+/* Card overlays para "AGOTADO" / "Últimas X uds" */
+.card-badge {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  color: #fff; font-weight: 800; font-size: 0.875rem;
+  letter-spacing: 0.05em;
+}
+.card-badge-out { background: rgba(23,32,38,0.55); }
+.card-badge-low {
+  background: linear-gradient(180deg, transparent 70%, rgba(202,138,4,0.92) 100%);
+  align-items: flex-end; padding-bottom: 8px;
+  font-size: 0.75rem; letter-spacing: 0.04em;
+}
+
+/* Selector de color y talla (Nike-style) */
+.color-swatch.out { opacity: 0.4; cursor: not-allowed; }
+.size-btn.out    { opacity: 0.4; cursor: not-allowed; text-decoration: line-through; }
+
+/* Perks del detalle del producto */
+.perks-row {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--neutral-200);
+}
+.perk-item {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-size: 0.78rem; color: var(--neutral-600);
+}
+.perk-item svg { color: var(--brand-500); }
+
+/* Reseñas grid */
+.reviews-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.75rem;
+}
+.review-card {
+  background: var(--neutral-50);
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+}
+.review-card .stars { color: #ca8a04; letter-spacing: 1px; }
+
+/* Mejor layout de OrderDetail (grid 2 columnas con fallback) */
+.order-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 320px;
+  gap: 1.5rem; align-items: start;
+}
+@media (max-width: 900px) {
+  .order-detail-grid { grid-template-columns: 1fr; }
+}
+
+/* MyOrders: KPIs + filas */
+.my-orders-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+@media (max-width: 720px) {
+  .my-orders-kpis { grid-template-columns: repeat(2, 1fr); }
+}
+.orders-list {
+  display: flex; flex-direction: column; gap: 0.5rem;
+}
+.order-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center; gap: 1rem;
+  padding: 0.9rem 1rem;
+  background: #fff;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: inherit;
+  transition: all var(--t);
+}
+.order-row:hover {
+  border-color: var(--brand-300);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+.order-row-icon {
+  width: 36px; height: 36px;
+  background: var(--brand-50);
+  border-radius: var(--radius-md);
+  display: grid; place-items: center;
+}
+.order-row-main .order-code { font-family: monospace; font-weight: 800; font-size: 0.9rem; }
+.order-row-main .order-date { font-size: 0.78rem; color: var(--neutral-500); }
+.order-row-status { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.order-row-amount { font-weight: 800; color: var(--neutral-900); }
+@media (max-width: 720px) {
+  .order-row { grid-template-columns: auto 1fr auto; }
+  .order-row-status { display: none; }
+}
+
+/* Empty state card */
+.empty-state-card {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: #fff;
+  border: 1px dashed var(--neutral-200);
+  border-radius: var(--radius-xl);
+}
+
+/* Info strip para admin (precio base, margen, etc.) */
+.info-strip {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.55rem 0.85rem;
+  background: var(--neutral-50);
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  margin: 0.4rem 0;
+}
+.info-strip span { color: var(--neutral-600); }
+.info-strip strong { color: var(--neutral-900); font-weight: 800; }
+.info-strip-success {
+  background: #ecfdf5; border-color: #a7f3d0;
+}
+.info-strip-success strong { color: #065f46; }
+.info-strip-danger {
+  background: #fef2f2; border-color: #fecaca;
+}
+.info-strip-danger strong { color: #991b1b; }
+
+/* Filtros de finanzas */
+.finance-filter-bar {
+  display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;
+  padding: 0.85rem 1rem;
+  background: var(--neutral-50);
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  margin-bottom: 1.25rem;
+}
+.finance-filter-section {
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+}
+
+/* Grid 2 columnas para cards (timeseries + expenses) */
+.grid-2-cards {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem;
+}
+@media (max-width: 900px) {
+  .grid-2-cards { grid-template-columns: 1fr; }
+}
+
+/* Filter chip - mejora visual */
+.filter-chip {
+  background: #fff;
+  border: 1px solid var(--neutral-200);
+  border-radius: 99px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--neutral-700);
+  transition: all var(--t);
+}
+.filter-chip:hover { border-color: var(--brand-300); color: var(--neutral-900); }
+.filter-chip.active {
+  background: var(--brand-500);
+  color: #fff;
+  border-color: var(--brand-500);
+}
+
+/* Badge success con check (en lista de items de OrderDetail) */
+.badge.badge-success { background: #dcfce7; color: #166534; font-weight: 700; }
+

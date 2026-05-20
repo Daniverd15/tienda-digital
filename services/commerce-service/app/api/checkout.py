@@ -14,6 +14,7 @@ from app.core.deps import current_user_id, get_correlation_id, get_current_user_
 from app.models import Cart, Order, OrderItem
 from app.schemas import CheckoutRequest
 from app.services.checkout_saga import execute_checkout
+from app.services.http_clients import inventory_get_variants_by_ids
 
 
 router = APIRouter(tags=["Checkout"])
@@ -81,12 +82,21 @@ def checkout(
     )
     db.add(order)
     db.flush()
+
+    # Snapshot del costo unitario desde Inventory para calculo posterior de COGS
+    # y margenes en el dashboard financiero. Una sola request batch para todos.
+    variant_ids = list({i.variant_id for i in cart.items})
+    cost_map = inventory_get_variants_by_ids(variant_ids)
+
     for it in cart.items:
+        info = cost_map.get(it.variant_id, {})
+        unit_cost = Decimal(str(info.get("cost") or 0))
         db.add(OrderItem(
             order_id=order.id, variant_id=it.variant_id, product_id=it.product_id,
             product_name=it.product_name, variant_description=it.variant_description,
             image_url=it.image_url, quantity=it.quantity,
             unit_price=Decimal(str(it.unit_price)),
+            unit_cost=unit_cost,
             total=Decimal(str(it.unit_price)) * it.quantity,
         ))
     db.commit()

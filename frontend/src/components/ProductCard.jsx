@@ -5,25 +5,27 @@ import { assetUrl } from '../utils/assets';
 export default function ProductCard({ product }) {
   const image = assetUrl(product.image_url) || 'https://images.unsplash.com/photo-1523381294911-8d3cead13475?w=600&q=80';
   const price = Number(product.base_price || 0).toLocaleString('es-CO');
-  const inStock = (product.stock || 0) > 0;
+  const inventoryAvailable = product.inventory_available !== false;
+  const variantCount = Number(product.variant_count || 0);
+  const stock = Number(product.stock || 0);
+  // Solo marcamos AGOTADO si Inventory confirmo: hay variantes y stock=0.
+  // Sin variantes registradas o sin Inventory: mostramos "Consultar" en vez de "AGOTADO".
+  const stockKnown = inventoryAvailable && variantCount > 0;
+  const isOutOfStock = stockKnown && stock <= 0;
+  const isLowStock = stockKnown && stock > 0 && stock <= 5;
 
   return (
     <article className="product-card">
       <div className="product-card-img">
         <img src={image} alt={product.name} loading="lazy" />
-        {!inStock && (
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'rgba(23,32,38,0.55)',
-            display: 'grid',
-            placeItems: 'center',
-            color: '#fff',
-            fontWeight: 800,
-            fontSize: '0.875rem',
-            letterSpacing: '0.05em',
-          }}>
+        {isOutOfStock && (
+          <div className="card-badge card-badge-out">
             AGOTADO
+          </div>
+        )}
+        {!isOutOfStock && isLowStock && (
+          <div className="card-badge card-badge-low">
+            Últimas {stock} uds
           </div>
         )}
       </div>
@@ -34,13 +36,18 @@ export default function ProductCard({ product }) {
         <div className="product-meta">
           <strong>${price}</strong>
           <span>
-            {inStock ? (
+            {!stockKnown ? (
               <>
                 <Package size={13} />
-                {product.stock} disponibles
+                Consultar
               </>
-            ) : (
+            ) : isOutOfStock ? (
               <span style={{ color: 'var(--error-text)', fontWeight: 700 }}>Sin stock</span>
+            ) : (
+              <>
+                <Package size={13} />
+                {stock} disponibles
+              </>
             )}
           </span>
         </div>
@@ -52,11 +59,11 @@ export default function ProductCard({ product }) {
           </div>
         )}
         <Link
-          className={`btn btn-primary ${!inStock ? 'btn-secondary' : ''}`}
+          className={`btn ${isOutOfStock ? 'btn-secondary' : 'btn-primary'}`}
           style={{ marginTop: '0.5rem' }}
           to={`/productos/${product.id}`}
         >
-          {inStock ? 'Ver detalle' : 'Ver producto'}
+          {isOutOfStock ? 'Ver producto' : 'Ver detalle'}
         </Link>
       </div>
     </article>

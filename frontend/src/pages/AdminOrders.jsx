@@ -7,17 +7,23 @@ import { OrderStatusBadge, PaymentStatusBadge } from '../components/Badge';
 import Modal from '../components/Modal';
 import { useToast } from '../context/ToastContext';
 
+/**
+ * Solo mostramos en el panel admin pedidos que se materializaron como ventas
+ * operativas. PAGO_RECHAZADO, PAGO_PENDIENTE y SIN_STOCK son artefactos de la
+ * SAGA (errores en el checkout) y no representan ventas reales — quedan
+ * disponibles para auditoria en la bitacora pero no requieren accion del
+ * admin sobre el pedido.
+ */
 const FILTERS = [
   { id: 'todos',          label: 'Todos' },
-  { id: 'pagado',         label: 'pagado',          statuses: ['PAID'] },
-  { id: 'pendiente_pago', label: 'pendiente pago',  statuses: ['CREATED', 'AWAITING_PAYMENT', 'PAGO_PENDIENTE'] },
-  { id: 'preparacion',    label: 'preparacion',     statuses: ['EN_PREPARACION'] },
-  { id: 'enviado',        label: 'enviado',         statuses: ['ENVIADO'] },
-  { id: 'entregado',      label: 'entregado',       statuses: ['ENTREGADO'] },
-  { id: 'cancelado',      label: 'cancelado',       statuses: ['CANCELADA'] },
-  { id: 'rechazado',      label: 'rechazado',       statuses: ['PAGO_RECHAZADO'], paymentStatuses: ['REJECTED'] },
-  { id: 'sin_stock',      label: 'sin stock',       statuses: ['SIN_STOCK'] },
+  { id: 'pagado',         label: 'Pagado',          statuses: ['PAID'] },
+  { id: 'preparacion',    label: 'En preparación',  statuses: ['EN_PREPARACION'] },
+  { id: 'enviado',        label: 'Enviado',         statuses: ['ENVIADO'] },
+  { id: 'entregado',      label: 'Entregado',       statuses: ['ENTREGADO'] },
+  { id: 'cancelado',      label: 'Cancelado',       statuses: ['CANCELADA'] },
 ];
+
+const OPERATIONAL_STATUSES = new Set(['PAID', 'EN_PREPARACION', 'ENVIADO', 'ENTREGADO', 'CANCELADA']);
 
 const STATUS_OPTIONS = {
   PAID: ['EN_PREPARACION', 'CANCELADA'],
@@ -26,16 +32,11 @@ const STATUS_OPTIONS = {
 };
 
 const STATUS_LABELS = {
-  CREATED: 'creado',
-  AWAITING_PAYMENT: 'pendiente pago',
-  PAID: 'pagado',
-  PAGO_PENDIENTE: 'pago pendiente',
-  PAGO_RECHAZADO: 'pago rechazado',
-  SIN_STOCK: 'sin stock',
-  EN_PREPARACION: 'preparacion',
-  ENVIADO: 'enviado',
-  ENTREGADO: 'entregado',
-  CANCELADA: 'cancelado',
+  PAID: 'Pagado',
+  EN_PREPARACION: 'En preparación',
+  ENVIADO: 'Enviado',
+  ENTREGADO: 'Entregado',
+  CANCELADA: 'Cancelado',
 };
 
 const COP = (v) => `$${Number(v || 0).toLocaleString('es-CO')}`;
@@ -58,7 +59,10 @@ export default function AdminOrders() {
 
   const { data: orders = [], loading, error, setData, refetch } = useAsync(async () => {
     const { data } = await api.get('/admin/orders');
-    return data;
+    // Solo mostramos pedidos con estados "operativos" en el panel admin.
+    // Los rechazados / pendientes / sin stock siguen registrados en DB y se
+    // consultan via la bitacora de auditoria, no en este listado.
+    return (data || []).filter((o) => OPERATIONAL_STATUSES.has(o.status));
   }, []);
 
   const updateStatus = async (order, status) => {

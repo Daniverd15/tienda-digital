@@ -81,6 +81,26 @@ def inventory_get_variant(variant_id: int, timeout_s: float = 2.0) -> dict | Non
         return None
 
 
+def inventory_get_variants_by_ids(variant_ids: list[int], timeout_s: float = 2.0) -> dict[int, dict]:
+    """Devuelve {variant_id: {price, cost, color, ...}} usando el endpoint batch
+    `/variants/by-ids`. Si falla devuelve {}. Usado por Commerce para snapshotear
+    `unit_cost` en el OrderItem al momento del checkout, sin pegarle a Inventory
+    una request por item.
+    """
+    if not variant_ids:
+        return {}
+    ids_csv = ",".join(str(int(v)) for v in variant_ids)
+    try:
+        with httpx.Client(timeout=timeout_s) as c:
+            r = c.get(f"{INVENTORY_URL}/variants/by-ids", params={"ids": ids_csv})
+        if r.status_code != 200:
+            return {}
+        return {row["id"]: row for row in r.json()}
+    except httpx.HTTPError as exc:
+        logger.warning("Inventory variants/by-ids fallo: %s", exc)
+        return {}
+
+
 def inventory_reserve(order_id: str, items: list[dict], token: str,
                       correlation_id: str | None = None, timeout_s: float = 5.0) -> dict:
     """Llama POST /reserve. Devuelve dict del response. Lanza HTTPError o ServiceUnavailable."""

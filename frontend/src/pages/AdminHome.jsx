@@ -76,11 +76,14 @@ export default function AdminHome() {
     const dash = {
       ventas_brutas:        s.gross_sales || 0,
       ordenes_aprobadas:    s.orders_count || 0,
-      cogs:                 0,
+      cogs:                 s.cogs || 0,
+      margen_bruto:         s.gross_margin || 0,
+      margen_bruto_pct:     s.gross_margin_pct || 0,
       costos_operativos:    s.operating_expenses || 0,
       nomina:               s.payroll || 0,
       utilidad_neta:        s.net_profit || 0,
-      rotacion_inventario:  0,
+      margen_neto_pct:      s.net_margin_pct || 0,
+      avg_ticket:           s.avg_ticket || 0,
       pedidos_por_estado:   buildOrderStatusData(orderRows),
       productos_mas_vendidos: buildTopProducts(orderRows, 6),
     };
@@ -245,10 +248,12 @@ export default function AdminHome() {
       {/* Finance summary row */}
       <div className="metric-grid" style={{ marginBottom: '1.5rem' }}>
         {[
-          ['Pedidos con venta', dash.ordenes_aprobadas || 0],
-          ['Costos operativos', COP(dash.costos_operativos)],
-          ['Nómina',            COP(dash.nomina)],
-          ['Margen neto', dash.ventas_brutas > 0 ? `${((dash.utilidad_neta / dash.ventas_brutas) * 100).toFixed(1)}%` : 'Sin ventas'],
+          ['Ticket promedio',  COP(dash.avg_ticket)],
+          ['COGS productos',   COP(dash.cogs)],
+          ['Margen bruto',     `${dash.margen_bruto_pct.toFixed(1)}%`],
+          ['Costos operativos',COP(dash.costos_operativos)],
+          ['Nómina mensual',   COP(dash.nomina)],
+          ['Margen neto',      dash.ventas_brutas > 0 ? `${dash.margen_neto_pct.toFixed(1)}%` : 'Sin ventas'],
         ].map(([label, value]) => (
           <div key={label} className="metric-card">
             <span>{label}</span>

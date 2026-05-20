@@ -114,6 +114,7 @@ class OrderItem(Base):
     image_url = Column(String(500), nullable=True)
     quantity = Column(Integer, nullable=False)
     unit_price = Column(Numeric(12, 2), nullable=False)
+    unit_cost = Column(Numeric(12, 2), nullable=False, default=0)   # snapshot del costo en Inventory al momento del checkout
     total = Column(Numeric(12, 2), nullable=False)
 
     order = relationship("Order", back_populates="items")

@@ -18,6 +18,7 @@ class VariantPublic(BaseModel):
     product_id: int
     sku: str
     color: str | None
+    color_hex: str | None
     size: str | None
     custom_attribute: str | None
     price: float
@@ -34,6 +35,7 @@ class VariantInternal(BaseModel):
     product_id: int
     sku: str
     color: str | None
+    color_hex: str | None
     size: str | None
     custom_attribute: str | None
     cost: float
@@ -50,6 +52,7 @@ class VariantAdminCreate(BaseModel):
     product_id: int = Field(gt=0)
     sku: str = Field(min_length=2, max_length=80)
     color: str | None = Field(default=None, max_length=80)
+    color_hex: str | None = Field(default=None, max_length=9)
     size: str | None = Field(default=None, max_length=80)
     custom_attribute: str | None = Field(default=None, max_length=160)
     cost: float = Field(ge=0)
@@ -61,6 +64,7 @@ class VariantAdminCreate(BaseModel):
 class VariantAdminUpdate(BaseModel):
     sku: str | None = Field(default=None, min_length=2, max_length=80)
     color: str | None = None
+    color_hex: str | None = Field(default=None, max_length=9)
     size: str | None = None
     custom_attribute: str | None = None
     cost: float | None = Field(default=None, ge=0)

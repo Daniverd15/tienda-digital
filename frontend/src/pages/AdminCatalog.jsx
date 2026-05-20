@@ -18,7 +18,22 @@ const emptyProduct = {
   archived: false,
   image_url: '',
 };
-const emptyVariant = { sku: '', color: '', size: '', custom_attribute: '', cost: '', price: '', stock: 0, reserved_stock: 0, active: true };
+const emptyVariant = { sku: '', color: '', color_hex: '#111111', size: '', custom_attribute: '', cost: '', price: '', stock: 0, reserved_stock: 0, active: true };
+
+const PRESET_COLORS = [
+  { name: 'Negro',   hex: '#111111' },
+  { name: 'Blanco',  hex: '#ffffff' },
+  { name: 'Gris',    hex: '#6b7280' },
+  { name: 'Azul',    hex: '#2563eb' },
+  { name: 'Rojo',    hex: '#dc2626' },
+  { name: 'Verde',   hex: '#16a34a' },
+  { name: 'Amarillo',hex: '#facc15' },
+  { name: 'Naranja', hex: '#ea580c' },
+  { name: 'Rosa',    hex: '#ec4899' },
+  { name: 'Morado',  hex: '#7c3aed' },
+  { name: 'Café',    hex: '#78350f' },
+  { name: 'Beige',   hex: '#d6c4a8' },
+];
 const emptyMovement = { variant_id: '', movement_type: 'entry', quantity: 1, reason: '' };
 
 const TABS = [
@@ -195,6 +210,17 @@ export default function AdminCatalog() {
     setLoading(true);
     try {
       const generatedSku = `P${selectedProduct}-${Date.now().toString(36).toUpperCase()}`;
+      // Validacion cliente: dos variantes del mismo color+talla son un conflicto.
+      const dup = (variants || []).find((v) =>
+        (v.color || '').trim().toLowerCase() === (variantForm.color || '').trim().toLowerCase() &&
+        (v.size  || '').trim().toLowerCase() === (variantForm.size  || '').trim().toLowerCase() &&
+        v.active,
+      );
+      if (dup && variantForm.color && variantForm.size) {
+        toast(`Ya existe una variante activa con color "${variantForm.color}" y talla "${variantForm.size}". Edita esa variante o cambia los atributos.`, 'error');
+        setLoading(false);
+        return;
+      }
       await api.post(`/admin/inventory/variants`, {
         product_id: Number(selectedProduct),
         ...variantForm,
@@ -407,7 +433,17 @@ export default function AdminCatalog() {
       )}
 
       {/* ── Variants ── */}
-      {tab === 'variants' && (
+      {tab === 'variants' && (() => {
+        const baseProduct = products.find((p) => Number(p.id) === Number(selectedProduct));
+        const margin = (() => {
+          const cost = Number(variantForm.cost || 0);
+          const price = Number(variantForm.price || 0);
+          if (!price || !cost) return null;
+          const m = price - cost;
+          const pct = price > 0 ? (m / price) * 100 : 0;
+          return { value: m, pct };
+        })();
+        return (
         <div className="form-grid">
           <form className="form-panel" onSubmit={submitVariant}>
             <h3>＋ Nueva variante</h3>
@@ -418,19 +454,81 @@ export default function AdminCatalog() {
                 {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </label>
+            {baseProduct && (
+              <div className="info-strip">
+                <span>Precio base del producto</span>
+                <strong>${Number(baseProduct.base_price).toLocaleString('es-CO')}</strong>
+              </div>
+            )}
             <label>
               SKU
               <input value={variantForm.sku} placeholder="Se genera automáticamente si se deja vacío" onChange={(e) => setVariantForm({ ...variantForm, sku: e.target.value })} />
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-              <label>Color <input value={variantForm.color} onChange={(e) => setVariantForm({ ...variantForm, color: e.target.value })} /></label>
-              <label>Talla <input value={variantForm.size} onChange={(e) => setVariantForm({ ...variantForm, size: e.target.value })} /></label>
+
+            {/* Color: nombre + selector visual de hex */}
+            <label>Color (nombre)
+              <input value={variantForm.color} placeholder="Negro, Blanco, Azul..." onChange={(e) => setVariantForm({ ...variantForm, color: e.target.value })} />
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.6rem', alignItems: 'center', margin: '0.4rem 0' }}>
+              <div
+                style={{
+                  width: 44, height: 44, borderRadius: 10,
+                  background: variantForm.color_hex || '#cccccc',
+                  border: '2px solid var(--neutral-200)',
+                }}
+                title={variantForm.color_hex}
+              />
+              <div>
+                <input
+                  type="color"
+                  value={variantForm.color_hex || '#111111'}
+                  onChange={(e) => setVariantForm({ ...variantForm, color_hex: e.target.value })}
+                  style={{ width: 60, height: 32, padding: 0, border: '1px solid var(--neutral-200)', borderRadius: 6 }}
+                />
+                <input
+                  value={variantForm.color_hex || ''}
+                  onChange={(e) => setVariantForm({ ...variantForm, color_hex: e.target.value })}
+                  placeholder="#000000"
+                  style={{ width: 100, marginLeft: 8, padding: '4px 8px', fontFamily: 'monospace' }}
+                />
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+                  {PRESET_COLORS.map((c) => (
+                    <button
+                      key={c.hex}
+                      type="button"
+                      title={c.name}
+                      onClick={() => setVariantForm({ ...variantForm, color: variantForm.color || c.name, color_hex: c.hex })}
+                      style={{
+                        width: 22, height: 22, borderRadius: '50%',
+                        background: c.hex, cursor: 'pointer',
+                        border: variantForm.color_hex === c.hex ? '2px solid var(--neutral-900)' : '1px solid var(--neutral-200)',
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
+
+            <label>Talla
+              <input value={variantForm.size} placeholder="S, M, L, 38, 40..." onChange={(e) => setVariantForm({ ...variantForm, size: e.target.value })} />
+            </label>
             <label>Atributo personalizado <input value={variantForm.custom_attribute} onChange={(e) => setVariantForm({ ...variantForm, custom_attribute: e.target.value })} /></label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-              <label>Costo * <input type="number" min="0" step="0.01" value={variantForm.cost} onChange={(e) => setVariantForm({ ...variantForm, cost: e.target.value })} required /></label>
-              <label>Precio venta * <input type="number" min="0" step="0.01" value={variantForm.price} onChange={(e) => setVariantForm({ ...variantForm, price: e.target.value })} required /></label>
+              <label>Costo unitario *
+                <input type="number" min="0" step="0.01" value={variantForm.cost} onChange={(e) => setVariantForm({ ...variantForm, cost: e.target.value })} required />
+              </label>
+              <label>Precio de venta *
+                <input type="number" min="0" step="0.01" value={variantForm.price} onChange={(e) => setVariantForm({ ...variantForm, price: e.target.value })} required />
+              </label>
             </div>
+            {margin && (
+              <div className={`info-strip ${margin.value < 0 ? 'info-strip-danger' : 'info-strip-success'}`}>
+                <span>Margen estimado por unidad</span>
+                <strong>
+                  ${Number(margin.value).toLocaleString('es-CO')} ({margin.pct.toFixed(1)}%)
+                </strong>
+              </div>
+            )}
             <label>Stock inicial <input type="number" min="0" value={variantForm.stock} onChange={(e) => setVariantForm({ ...variantForm, stock: e.target.value })} /></label>
             <button type="submit" className="btn btn-primary" style={{ marginTop: '0.75rem' }} disabled={loading}>Crear variante</button>
           </form>
@@ -441,34 +539,55 @@ export default function AdminCatalog() {
                 <thead>
                   <tr>
                     <th>SKU</th>
-                    <th>Atributos</th>
+                    <th>Color</th>
+                    <th>Talla</th>
                     <th>Costo</th>
                     <th>Precio</th>
+                    <th>Margen</th>
                     <th>Stock</th>
                     <th>Estado</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {variants.map((v) => (
-                    <tr key={v.id}>
-                      <td><span className="font-mono" style={{ fontWeight: 700, fontSize: '0.8125rem' }}>{v.sku}</span></td>
-                      <td>
-                        {[v.color, v.size, v.custom_attribute].filter(Boolean).map((attr, i) => (
-                          <span key={i} style={{ display: 'inline-block', background: '#f0f2ee', borderRadius: 4, padding: '1px 6px', fontSize: '0.75rem', marginRight: 4 }}>{attr}</span>
-                        ))}
-                      </td>
-                      <td>${Number(v.cost).toLocaleString('es-CO')}</td>
-                      <td style={{ fontWeight: 700 }}>${Number(v.price).toLocaleString('es-CO')}</td>
-                      <td>
-                        <span style={{ fontWeight: 700, color: v.stock === 0 ? '#991b1b' : v.stock < 5 ? '#854d0e' : '#166534' }}>
-                          {v.stock}
-                        </span>
-                      </td>
-                      <td><Badge variant={v.active ? 'success' : 'neutral'}>{v.active ? 'Activa' : 'Inactiva'}</Badge></td>
-                    </tr>
-                  ))}
+                  {variants.map((v) => {
+                    const cost = Number(v.cost || 0);
+                    const price = Number(v.price || 0);
+                    const m = price - cost;
+                    const mPct = price > 0 ? (m / price) * 100 : 0;
+                    return (
+                      <tr key={v.id}>
+                        <td><span className="font-mono" style={{ fontWeight: 700, fontSize: '0.8125rem' }}>{v.sku}</span></td>
+                        <td>
+                          {v.color ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{
+                                display: 'inline-block', width: 16, height: 16, borderRadius: '50%',
+                                background: v.color_hex || '#ccc',
+                                border: '1px solid var(--neutral-300)',
+                              }} />
+                              <span style={{ fontSize: '0.8125rem' }}>{v.color}</span>
+                            </div>
+                          ) : <span style={{ color: 'var(--neutral-400)' }}>—</span>}
+                        </td>
+                        <td>{v.size || <span style={{ color: 'var(--neutral-400)' }}>—</span>}</td>
+                        <td>${Number(v.cost).toLocaleString('es-CO')}</td>
+                        <td style={{ fontWeight: 700 }}>${Number(v.price).toLocaleString('es-CO')}</td>
+                        <td>
+                          <span style={{ fontWeight: 700, color: m < 0 ? '#991b1b' : m === 0 ? '#854d0e' : '#166534' }}>
+                            {mPct.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td>
+                          <span style={{ fontWeight: 700, color: v.stock === 0 ? '#991b1b' : v.stock < 5 ? '#854d0e' : '#166534' }}>
+                            {v.stock}
+                          </span>
+                        </td>
+                        <td><Badge variant={v.active ? 'success' : 'neutral'}>{v.active ? 'Activa' : 'Inactiva'}</Badge></td>
+                      </tr>
+                    );
+                  })}
                   {variants.length === 0 && (
-                    <tr><td colSpan={6} className="state">Sin variantes para este producto</td></tr>
+                    <tr><td colSpan={8} className="state">Sin variantes para este producto</td></tr>
                   )}
                 </tbody>
               </table>
@@ -477,7 +596,8 @@ export default function AdminCatalog() {
             )}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Inventory ── */}
       {tab === 'inventory' && (

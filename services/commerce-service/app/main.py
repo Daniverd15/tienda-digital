@@ -28,10 +28,26 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger("commerce-service")
 
 
+def soft_migrate() -> None:
+    """Migracion suave: agrega columnas nuevas si no existen.
+
+    Idempotente: ignora errores cuando la columna ya esta presente.
+    """
+    with engine.begin() as conn:
+        try:
+            conn.execute(text(
+                "ALTER TABLE order_items ADD COLUMN unit_cost DECIMAL(12,2) NOT NULL DEFAULT 0"
+            ))
+            logger.info("Migracion suave: agregada order_items.unit_cost")
+        except Exception:  # noqa: BLE001
+            pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Inicializando %s ...", settings.service_name)
     Base.metadata.create_all(bind=engine)
+    soft_migrate()
     logger.info("%s listo en puerto %s", settings.service_name, settings.service_port)
     yield
 

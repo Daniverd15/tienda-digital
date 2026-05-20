@@ -40,21 +40,21 @@ def ensure_seed() -> None:
             return
         variantes = [
             # Camiseta negra
-            dict(product_id=1, sku="CAM-NEG-S", color="negro",  size="S",  cost=22000, price=49000, stock=10),
-            dict(product_id=1, sku="CAM-NEG-M", color="negro",  size="M",  cost=22000, price=49000, stock=15),
-            dict(product_id=1, sku="CAM-NEG-L", color="negro",  size="L",  cost=22000, price=49000, stock=8),
+            dict(product_id=1, sku="CAM-NEG-S", color="negro",  color_hex="#111111", size="S",  cost=22000, price=49000, stock=10),
+            dict(product_id=1, sku="CAM-NEG-M", color="negro",  color_hex="#111111", size="M",  cost=22000, price=49000, stock=15),
+            dict(product_id=1, sku="CAM-NEG-L", color="negro",  color_hex="#111111", size="L",  cost=22000, price=49000, stock=8),
             # Camiseta blanca
-            dict(product_id=2, sku="CAM-BLA-M", color="blanco", size="M",  cost=22000, price=49000, stock=12),
-            dict(product_id=2, sku="CAM-BLA-L", color="blanco", size="L",  cost=22000, price=49000, stock=4),
+            dict(product_id=2, sku="CAM-BLA-M", color="blanco", color_hex="#ffffff", size="M",  cost=22000, price=49000, stock=12),
+            dict(product_id=2, sku="CAM-BLA-L", color="blanco", color_hex="#ffffff", size="L",  cost=22000, price=49000, stock=4),
             # Gorra urbana
-            dict(product_id=3, sku="GOR-AZU",   color="azul",   size=None, cost=16000, price=35000, stock=20),
-            dict(product_id=3, sku="GOR-NEG",   color="negro",  size=None, cost=16000, price=35000, stock=3),   # alerta
+            dict(product_id=3, sku="GOR-AZU",   color="azul",   color_hex="#2563eb", size=None, cost=16000, price=35000, stock=20),
+            dict(product_id=3, sku="GOR-NEG",   color="negro",  color_hex="#111111", size=None, cost=16000, price=35000, stock=3),   # alerta
             # Tenis
-            dict(product_id=4, sku="TEN-40",    color="blanco", size="40", cost=95000, price=189000, stock=6),
-            dict(product_id=4, sku="TEN-42",    color="blanco", size="42", cost=95000, price=189000, stock=6),
-            dict(product_id=4, sku="TEN-44",    color="negro",  size="44", cost=95000, price=189000, stock=0),   # sin stock
+            dict(product_id=4, sku="TEN-40",    color="blanco", color_hex="#ffffff", size="40", cost=95000, price=189000, stock=6),
+            dict(product_id=4, sku="TEN-42",    color="blanco", color_hex="#ffffff", size="42", cost=95000, price=189000, stock=6),
+            dict(product_id=4, sku="TEN-44",    color="negro",  color_hex="#111111", size="44", cost=95000, price=189000, stock=0),   # sin stock
             # Mochila
-            dict(product_id=5, sku="MOC-CLA",   color="negro",  size=None, cost=65000, price=129000, stock=18),
+            dict(product_id=5, sku="MOC-CLA",   color="negro",  color_hex="#111111", size=None, cost=65000, price=129000, stock=18),
         ]
         for v in variantes:
             db.add(ProductVariant(**v, active=True, reserved_stock=0))
@@ -64,10 +64,25 @@ def ensure_seed() -> None:
         db.close()
 
 
+def soft_migrate() -> None:
+    """Migracion suave: agrega columnas nuevas si no existen.
+
+    Idempotente: si la columna ya esta presente, MySQL devuelve un error que
+    silenciamos. Reemplaza Alembic para los cambios pequenos del MVP.
+    """
+    with engine.begin() as conn:
+        try:
+            conn.execute(text("ALTER TABLE product_variants ADD COLUMN color_hex VARCHAR(9) NULL"))
+            logger.info("Migracion suave: agregada columna product_variants.color_hex")
+        except Exception:  # noqa: BLE001
+            pass  # columna ya existe
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Inicializando %s ...", settings.service_name)
     Base.metadata.create_all(bind=engine)
+    soft_migrate()
     ensure_seed()
     task = asyncio.create_task(run_scheduler_forever(interval_seconds=60))
     logger.info("%s listo en puerto %s", settings.service_name, settings.service_port)

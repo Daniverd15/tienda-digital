@@ -22,8 +22,19 @@ def serialize_image(image: ProductImage) -> dict:
     return {"id": image.id, "image_url": image.image_url, "alt_text": image.alt_text}
 
 
-def serialize_product_summary(product: Product) -> dict:
+def serialize_product_summary(product: Product, stock_info: dict | None = None,
+                              inventory_available: bool = True) -> dict:
+    """Convierte el producto en dict para el listado publico.
+
+    `stock_info` es la entrada del stock-summary de Inventory para este producto
+    (puede ser None si el producto no tiene variantes o si Inventory esta caido).
+    `inventory_available` indica si Inventory respondio: cuando es False el
+    frontend NO debe pintar "AGOTADO" porque no es informacion confiable.
+    """
     rating = product.rating
+    stock_info = stock_info or {}
+    stock_total = int(stock_info.get("stock", 0))
+    variant_count = int(stock_info.get("variant_count", 0))
     return {
         "id": product.id,
         "category_id": product.category_id,
@@ -36,6 +47,10 @@ def serialize_product_summary(product: Product) -> dict:
         "archived": product.archived,
         "average_rating": rating.average if rating else 0.0,
         "reviews_count": rating.count if rating else 0,
+        # Stock real (agregado desde Inventory)
+        "stock": stock_total,
+        "variant_count": variant_count,
+        "inventory_available": inventory_available,
     }
 
 

@@ -38,7 +38,8 @@ class ProductVariant(Base, TimestampMixin):
     id = Column(Integer, primary_key=True)
     product_id = Column(Integer, nullable=False, index=True)  # ref logica a Catalog
     sku = Column(String(80), nullable=False)
-    color = Column(String(80), nullable=True)
+    color = Column(String(80), nullable=True)        # nombre del color (ej. "Negro")
+    color_hex = Column(String(9), nullable=True)     # valor visual (#000000, #ff5733aa)
     size = Column(String(80), nullable=True)
     custom_attribute = Column(String(160), nullable=True)
     cost = Column(Numeric(12, 2), nullable=False, default=0)

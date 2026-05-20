@@ -18,6 +18,7 @@ from app.models import (
     Notification,
     Order,
     OrderAuditLog,
+    OrderItem,
     OrderStatusHistory,
     Review,
 )
@@ -28,6 +29,7 @@ from app.schemas import (
     ExpensePublic,
     ExpenseUpsert,
     FinanceSummary,
+    FinanceTimeseriesPoint,
     OrderAuditLogPublic,
     OrderStatusUpdate,
     ReviewPublic,
@@ -209,39 +211,106 @@ def delete_expense(expense_id: int, _: dict = Depends(require_admin),
 # -----------------------------------------------------------------------------
 
 
+SALES_STATUSES = ["PAID", "EN_PREPARACION", "ENVIADO", "ENTREGADO"]
+
+
 @router.get("/finance/summary", response_model=FinanceSummary)
 def finance_summary(
     period_from: date | None = Query(default=None),
     period_to: date | None = Query(default=None),
+    granularity: str = Query(default="month", pattern="^(day|month|year)$"),
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Calcula ventas brutas (orders en estado PAID/ENVIADO/ENTREGADO + sum total),
-    cantidad de pedidos, gastos operativos y nomina activa.
+    """Resumen financiero del periodo solicitado.
+
+    Calcula:
+    - ventas brutas (suma de Order.total con estado operativo)
+    - COGS = sum(OrderItem.unit_cost * quantity) en los pedidos del periodo
+    - margen bruto = ventas - COGS
+    - gastos operativos (Expense.amount del periodo)
+    - nomina activa (sum Employee.salary con employment_status='active')
+    - utilidad neta = margen bruto - gastos - nomina
+    - timeseries: serie agregada por dia/mes/ano para graficar tendencia
     """
     sales_q = db.query(func.coalesce(func.sum(Order.total), 0), func.count(Order.id)).filter(
-        Order.status.in_(["PAID", "EN_PREPARACION", "ENVIADO", "ENTREGADO"])
+        Order.status.in_(SALES_STATUSES)
+    )
+    cogs_q = (
+        db.query(func.coalesce(func.sum(OrderItem.unit_cost * OrderItem.quantity), 0))
+        .join(Order, OrderItem.order_id == Order.id)
+        .filter(Order.status.in_(SALES_STATUSES))
     )
     expenses_q = db.query(func.coalesce(func.sum(Expense.amount), 0))
     if period_from:
-        sales_q = sales_q.filter(Order.created_at >= datetime.combine(period_from, datetime.min.time()))
+        f_dt = datetime.combine(period_from, datetime.min.time())
+        sales_q = sales_q.filter(Order.created_at >= f_dt)
+        cogs_q = cogs_q.filter(Order.created_at >= f_dt)
         expenses_q = expenses_q.filter(Expense.expense_date >= period_from)
     if period_to:
-        sales_q = sales_q.filter(Order.created_at <= datetime.combine(period_to, datetime.max.time()))
+        t_dt = datetime.combine(period_to, datetime.max.time())
+        sales_q = sales_q.filter(Order.created_at <= t_dt)
+        cogs_q = cogs_q.filter(Order.created_at <= t_dt)
         expenses_q = expenses_q.filter(Expense.expense_date <= period_to)
     gross_sales, orders_count = sales_q.first()
+    cogs_total = cogs_q.scalar() or 0
     operating_expenses = expenses_q.scalar() or 0
     payroll = (
         db.query(func.coalesce(func.sum(Employee.salary), 0))
         .filter(Employee.employment_status == "active")
         .scalar() or 0
     )
-    net = float(gross_sales) - float(operating_expenses) - float(payroll)
+    gross_sales = float(gross_sales)
+    cogs_total = float(cogs_total)
+    gross_margin = gross_sales - cogs_total
+    operating_expenses = float(operating_expenses)
+    payroll = float(payroll)
+    net = gross_margin - operating_expenses - payroll
+    gm_pct = (gross_margin / gross_sales * 100.0) if gross_sales > 0 else 0
+    nm_pct = (net / gross_sales * 100.0) if gross_sales > 0 else 0
+    avg_ticket = (gross_sales / orders_count) if orders_count else 0
+
+    # Timeseries por granularidad: agrupa Order.created_at + suma de cost*qty
+    if granularity == "day":
+        date_expr = func.date_format(Order.created_at, "%Y-%m-%d")
+    elif granularity == "year":
+        date_expr = func.date_format(Order.created_at, "%Y")
+    else:
+        date_expr = func.date_format(Order.created_at, "%Y-%m")
+
+    ts_q = (
+        db.query(
+            date_expr.label("label"),
+            func.coalesce(func.sum(Order.total), 0),
+            func.coalesce(func.sum(OrderItem.unit_cost * OrderItem.quantity), 0),
+            func.count(func.distinct(Order.id)),
+        )
+        .join(OrderItem, OrderItem.order_id == Order.id, isouter=True)
+        .filter(Order.status.in_(SALES_STATUSES))
+    )
+    if period_from:
+        ts_q = ts_q.filter(Order.created_at >= datetime.combine(period_from, datetime.min.time()))
+    if period_to:
+        ts_q = ts_q.filter(Order.created_at <= datetime.combine(period_to, datetime.max.time()))
+    ts_rows = ts_q.group_by("label").order_by("label").all()
+    timeseries = [
+        FinanceTimeseriesPoint(
+            label=str(label),
+            gross_sales=float(sales or 0),
+            cogs=float(cogs or 0),
+            orders_count=int(count or 0),
+            gross_margin=float((sales or 0) - (cogs or 0)),
+        )
+        for label, sales, cogs, count in ts_rows
+    ]
+
     return FinanceSummary(
-        period_from=period_from, period_to=period_to,
-        gross_sales=float(gross_sales), orders_count=int(orders_count or 0),
-        operating_expenses=float(operating_expenses), payroll=float(payroll),
-        net_profit=net,
+        period_from=period_from, period_to=period_to, granularity=granularity,
+        gross_sales=gross_sales, orders_count=int(orders_count or 0),
+        cogs=cogs_total, gross_margin=gross_margin, gross_margin_pct=gm_pct,
+        operating_expenses=operating_expenses, payroll=payroll,
+        net_profit=net, net_margin_pct=nm_pct,
+        avg_ticket=avg_ticket, timeseries=timeseries,
     )
 
 

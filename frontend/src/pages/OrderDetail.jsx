@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   CheckCircle,
@@ -5,6 +6,9 @@ import {
   Package,
   Star,
   Truck,
+  CreditCard,
+  PackageCheck,
+  Home,
 } from 'lucide-react';
 import api from '../api/client';
 import { useAsync } from '../hooks/useAsync';
@@ -12,31 +16,64 @@ import { OrderStatusBadge, PaymentStatusBadge } from '../components/Badge';
 
 const COP = (v) => `$${Number(v || 0).toLocaleString('es-CO')}`;
 
+/**
+ * Los estados visibles para el cliente. Cubre tanto los nombres del monolito
+ * legacy (pendiente_pago, preparacion...) como los de microservicios
+ * (PAID, EN_PREPARACION, ENVIADO, ENTREGADO).
+ */
 const ORDER_STEPS = [
-  { key: 'pendiente_pago', label: 'Pendiente de pago' },
-  { key: 'preparacion',    label: 'En preparación' },
-  { key: 'enviado',        label: 'Enviado' },
-  { key: 'entregado',      label: 'Entregado' },
+  { keys: ['PAID', 'pagado', 'pendiente_pago'],            label: 'Pago confirmado',  icon: CreditCard },
+  { keys: ['EN_PREPARACION', 'preparacion'],               label: 'En preparación',   icon: PackageCheck },
+  { keys: ['ENVIADO', 'enviado'],                          label: 'Enviado',          icon: Truck },
+  { keys: ['ENTREGADO', 'entregado'],                      label: 'Entregado',        icon: Home },
 ];
 
-function OrderTimeline({ status }) {
-  const stepIndex = ORDER_STEPS.findIndex((s) => s.key === status);
+function statusIndex(status) {
+  for (let i = 0; i < ORDER_STEPS.length; i += 1) {
+    if (ORDER_STEPS[i].keys.includes(status)) return i;
+  }
+  return -1;
+}
+
+function fmtDate(d) {
+  if (!d) return '';
+  try { return new Date(d).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }); }
+  catch { return ''; }
+}
+
+function OrderTimeline({ order }) {
+  const stepIndex = statusIndex(order.status);
+  // Construimos un mapa de fecha por estado, usando order.history si viene.
+  const dateByStep = {};
+  (order.history || []).forEach((h) => {
+    const idx = statusIndex(h.to_status);
+    if (idx >= 0 && !dateByStep[idx]) dateByStep[idx] = h.changed_at;
+  });
+  // Si no hay history, al menos marcamos el primer paso con created_at
+  if (stepIndex >= 0 && !dateByStep[0]) dateByStep[0] = order.created_at;
 
   return (
     <div className="order-timeline">
       {ORDER_STEPS.map((step, i) => {
-        const done   = i < stepIndex || (status === 'entregado' && i <= stepIndex);
-        const active = i === stepIndex && status !== 'cancelado' && status !== 'rechazado';
+        const Icon = step.icon;
+        const done   = i < stepIndex;
+        const active = i === stepIndex;
+        const passed = done || active;
+        const date = dateByStep[i];
         return (
-          <div key={step.key} className="timeline-step">
+          <div key={step.label} className="timeline-step">
             <div className={`timeline-dot ${done ? 'done' : active ? 'active' : ''}`}>
-              {done ? <CheckCircle size={12} color="#fff" /> : active ? <Circle size={10} color="#fff" fill="#fff" /> : null}
+              {passed
+                ? <Icon size={12} color="#fff" />
+                : <Circle size={9} color="#cbd0c8" />}
             </div>
             <div className="timeline-content">
-              <strong style={{ color: done || active ? 'var(--neutral-900)' : 'var(--neutral-400)' }}>
+              <strong style={{ color: passed ? 'var(--neutral-900)' : 'var(--neutral-400)' }}>
                 {step.label}
               </strong>
-              {active && <span>Estado actual del pedido</span>}
+              {active && <span style={{ color: 'var(--brand-600)' }}>Estado actual</span>}
+              {done && date && <span>{fmtDate(date)}</span>}
+              {active && date && <span>{fmtDate(date)}</span>}
             </div>
           </div>
         );
@@ -52,10 +89,25 @@ export default function OrderDetail() {
     return data;
   }, [id]);
 
+  const [myReviews, setMyReviews] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    api.get('/reviews/mine')
+      .then(({ data }) => { if (active) setMyReviews(data || []); })
+      .catch(() => { /* sin reviews aun */ });
+    return () => { active = false; };
+  }, []);
+
   if (loading) return <div className="state">Cargando pedido...</div>;
   if (error)   return <div className="state error">{error}</div>;
 
-  const canReview = order.status === 'entregado' && order.payment_status === 'aprobado';
+  const isDelivered = ['ENTREGADO', 'entregado'].includes(order.status);
+  const isCancelled = ['CANCELADA', 'cancelado', 'EXPIRADA'].includes(order.status);
+  const canReview = isDelivered;
+  const reviewedProductIds = new Set(
+    myReviews.filter((r) => r.order_id === order.id).map((r) => r.product_id),
+  );
 
   return (
     <main className="page-shell">
@@ -73,7 +125,7 @@ export default function OrderDetail() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '1.5rem', alignItems: 'start' }}>
+      <div className="order-detail-grid">
         {/* Left */}
         <div style={{ display: 'grid', gap: '1.25rem' }}>
           {/* Items */}
@@ -87,25 +139,34 @@ export default function OrderDetail() {
                   <tr><th>Producto</th><th>Variante</th><th>Cant.</th><th style={{textAlign:'right'}}>Total</th>{canReview && <th>Reseña</th>}</tr>
                 </thead>
                 <tbody>
-                  {order.items.map((item) => (
-                    <tr key={item.id}>
-                      <td><strong>{item.product_name}</strong></td>
-                      <td style={{ color: 'var(--neutral-500)', fontSize: '0.8125rem' }}>{item.variant_description || '—'}</td>
-                      <td>{item.quantity}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 800 }}>{COP(item.total)}</td>
-                      {canReview && (
-                        <td>
-                          <Link
-                            to={`/resenas/${order.id}/${item.product_id}`}
-                            className="btn btn-ghost btn-sm"
-                            style={{ gap: 4 }}
-                          >
-                            <Star size={13} /> Reseñar
-                          </Link>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
+                  {order.items.map((item) => {
+                    const alreadyReviewed = reviewedProductIds.has(item.product_id);
+                    return (
+                      <tr key={item.id}>
+                        <td><strong>{item.product_name}</strong></td>
+                        <td style={{ color: 'var(--neutral-500)', fontSize: '0.8125rem' }}>{item.variant_description || '—'}</td>
+                        <td>{item.quantity}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 800 }}>{COP(item.total)}</td>
+                        {canReview && (
+                          <td>
+                            {alreadyReviewed ? (
+                              <span className="badge badge-success">
+                                <CheckCircle size={12} /> Reseñado
+                              </span>
+                            ) : (
+                              <Link
+                                to={`/resenas/${order.id}/${item.product_id}`}
+                                className="btn btn-primary btn-sm"
+                                style={{ gap: 4 }}
+                              >
+                                <Star size={13} /> Dejar reseña
+                              </Link>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -147,25 +208,23 @@ export default function OrderDetail() {
           </div>
 
           {/* Timeline */}
-          {!['cancelado','rechazado'].includes(order.status) && (
+          {!isCancelled && (
             <div className="section-card">
               <div className="section-card-header"><span className="section-card-title">Progreso del pedido</span></div>
               <div className="section-card-body">
-                <OrderTimeline status={order.status} />
+                <OrderTimeline order={order} />
               </div>
             </div>
           )}
 
-          {order.status === 'cancelado' && (
+          {isCancelled && (
             <div className="alert error">Este pedido fue cancelado.</div>
-          )}
-          {order.status === 'rechazado' && (
-            <div className="alert error">El pago de este pedido fue rechazado.</div>
           )}
 
           {canReview && (
             <div className="alert success">
-              ¡Pedido entregado! Puedes dejar reseñas en los productos de este pedido.
+              <Star size={16} />
+              ¡Pedido entregado! Puedes dejar reseñas en los productos comprados.
             </div>
           )}
         </div>

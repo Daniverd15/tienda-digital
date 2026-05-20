@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core import cache
 from app.core.database import get_db
 from app.models import Category, InformativeMessage, Product, StoreSetting
-from app.services.inventory_client import get_variants_for_product
+from app.services.inventory_client import get_stock_summary, get_variants_for_product
 from app.services.serializers import (
     serialize_category,
     serialize_product_detail,
@@ -121,7 +121,12 @@ def list_products(
     order: str = Query(default="recent", pattern="^(recent|name|price_asc|price_desc)$"),
     db: Session = Depends(get_db),
 ):
-    """Listado de productos publicados. Cache TTL 60s con clave por parametros."""
+    """Listado de productos publicados. Cache TTL 60s con clave por parametros.
+
+    Enriquece cada producto con `stock` (agregado desde Inventory). Si Inventory
+    no responde se sirve igual el listado pero con `inventory_available=False`
+    para que el frontend no pinte "AGOTADO" sin informacion confiable.
+    """
     cache_key = (
         f"catalog:products:q={q or ''}:cat={category_id or 0}"
         f":min={min_price or 0}:max={max_price or 0}:order={order}"
@@ -159,7 +164,12 @@ def list_products(
     else:
         qry = qry.order_by(Product.created_at.desc())
 
-    data = [serialize_product_summary(p) for p in qry.all()]
+    # Stock real agregado desde Inventory (Cache-Aside con TTL corto).
+    stock_map, inv_ok = get_stock_summary()
+    data = [
+        serialize_product_summary(p, stock_map.get(str(p.id)), inventory_available=inv_ok)
+        for p in qry.all()
+    ]
     cache.set_(cache_key, data, CACHE_TTL_PRODUCTS_LIST)
     return data
 
@@ -205,11 +215,15 @@ def catalog_overview(db: Session = Depends(get_db)):
         .limit(6)
         .all()
     )
+    stock_map, inv_ok = get_stock_summary()
     data = {
         "settings": s_data,
         "messages": m_data,
         "categories": cat_data,
-        "featured_products": [serialize_product_summary(p) for p in products],
+        "featured_products": [
+            serialize_product_summary(p, stock_map.get(str(p.id)), inventory_available=inv_ok)
+            for p in products
+        ],
     }
     cache.set_("catalog:overview", data, CACHE_TTL_PRODUCTS_LIST)
     return data
