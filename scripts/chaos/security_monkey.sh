@@ -1,14 +1,25 @@
 #!/usr/bin/env bash
+# ============================================================================
 # Security Monkey: el sistema valida autorizacion y rechaza accesos invalidos.
+# ============================================================================
+#
+# Equivalente del Security Monkey del Simian Army de Netflix: audita
+# defensas de seguridad del sistema en busca de vulnerabilidades comunes
+# (OWASP Top 10: broken authentication, broken access control, IDOR).
 #
 # Hipotesis (informe Fase 1, seccion 18.9):
-# - /admin/* sin JWT -> 401
-# - /admin/* con JWT de customer -> 403
-# - Cabeceras de seguridad presentes en el gateway
-# - JWT invalido -> 401
-# - JWT vencido / corrupto -> 401
-# - Logs no contienen tokens
-# - Pedidos ajenos no son consultables por otros usuarios
+#   - /admin/* sin JWT → 401 Unauthorized.
+#   - /admin/* con JWT de customer (no admin) → 403 Forbidden.
+#   - Cabeceras de seguridad presentes en el gateway (X-Frame-Options,
+#     X-Content-Type-Options, Referrer-Policy).
+#   - JWT con firma invalida → 401.
+#   - JWT vencido o corrupto → 401.
+#   - Logs NO contienen tokens (evita filtraciones por log scraping).
+#   - Pedidos ajenos NO son consultables por otros usuarios (IDOR).
+#   - Rate limit en /auth/login impide brute force (5 req/min/IP).
+#
+# Salida esperada: 27 PASS / 0 FAIL en condiciones normales.
+# ============================================================================
 
 set -u
 DIR="$(cd "$(dirname "$0")/.." && pwd)"

@@ -1,13 +1,25 @@
 #!/usr/bin/env bash
+# ============================================================================
 # Conformity Monkey: cada microservicio cumple los estandares del equipo.
+# ============================================================================
+#
+# Verifica que la arquitectura de microservicios sigue las convenciones
+# acordadas. Es el "police monkey" del Simian Army: no rompe nada,
+# audita conformidad.
 #
 # Hipotesis (informe Fase 1, seccion 18.8):
-# - Cada servicio expone /health
-# - Cada servicio tiene .env.example, Dockerfile, requirements.txt, app/, tests/
-# - Cada servicio responde 200 desde su puerto directo
-# - Cada servicio reporta su nombre en GET /
-# - Cada Dockerfile usa USER no-root
-# - El gateway enruta los 5 servicios correctamente
+#   - Cada servicio expone GET /health con respuesta 200 + checks.
+#   - Cada servicio tiene la estructura estandar: .env.example, Dockerfile,
+#     requirements.txt, app/, tests/.
+#   - Cada servicio responde desde su puerto directo (8001-8005).
+#   - Cada servicio reporta su nombre en GET / (meta endpoint).
+#   - Cada Dockerfile declara USER no-root (security best practice).
+#   - El gateway enruta correctamente a los 5 servicios via /api/<svc>.
+#   - Database per Service: cada usuario MySQL solo accede a su propio
+#     esquema (GRANT exclusivo verificado).
+#
+# Salida esperada: 51 PASS / 0 FAIL en condiciones normales.
+# ============================================================================
 
 set -u
 DIR="$(cd "$(dirname "$0")/.." && pwd)"

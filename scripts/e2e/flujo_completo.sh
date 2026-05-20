@@ -1,10 +1,41 @@
 #!/usr/bin/env bash
-# Suite E2E del flujo principal de Tienda Digital.
-# Recorre los 5 microservicios y valida el contrato esperado.
+# ============================================================================
+# Suite E2E (End-to-End) del flujo principal de Tienda Digital.
+# ============================================================================
+#
+# Recorre los 5 microservicios coordinados y valida el contrato esperado
+# de cada interaccion. Es el smoke test mas importante: si pasa, el
+# sistema esta funcional en su core. Si falla, hay algo basico roto.
+#
+# Lo que valida (18 steps con ~34 assertions):
+#   1. Healthchecks de los 6 servicios (gateway + 5 micros) → 200
+#   2. Registro de cliente nuevo → tokens + correo bienvenida
+#   3. Login con las credenciales recien creadas
+#   4. Login admin con credenciales seed
+#   5. GET /auth/me devuelve el perfil correcto + role
+#   6. Catalogo publico responde con productos del seed
+#   7. Detalle de producto trae variantes enriquecidas desde Inventory
+#   8. Carrito vacio al inicio
+#   9. Agregar 2 productos al carrito + validar subtotal calculado
+#  10. Checkout con monto APPROVED (.00) → Order(PAID) + stock baja
+#  11. /orders/mine devuelve el pedido recien creado
+#  12. /orders/{id} trae historia con paso a PAID
+#  13. Cliente recibe notificacion en /notifications
+#  14. Admin transiciona PAID → EN_PREPARACION → ENVIADO → ENTREGADO
+#  15. Cliente crea reseña del producto comprado (entra pendiente)
+#  16. Admin aprueba la reseña + Catalog refleja el rating actualizado
+#  17. Casos negativos: 401 sin token, 403 admin con customer, 401 con clave mala
+#  18. Resumen financiero admin refleja la venta efectuada
 #
 # Uso:
-#   docker compose up -d
+#   docker compose up -d            # asegurar 12 contenedores arriba
 #   ./scripts/e2e/flujo_completo.sh
+#
+# Variable opcional:
+#   E2E_USER_EMAIL → forzar un email especifico (default: e2e-test-<timestamp>@cliente.com)
+#
+# Salida esperada: 34 PASS / 0 FAIL en condiciones normales.
+# ============================================================================
 
 set -u
 DIR="$(cd "$(dirname "$0")/.." && pwd)"

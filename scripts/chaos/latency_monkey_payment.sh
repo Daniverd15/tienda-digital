@@ -1,12 +1,34 @@
 #!/usr/bin/env bash
+# ============================================================================
 # Latency Monkey: forzar fallos repetidos de la pasarela y verificar que el
 # Circuit Breaker abre + el checkout degrada graceful.
+# ============================================================================
+#
+# Equivalente del Latency Monkey del Simian Army de Netflix: en vez de
+# tirar abajo un servicio, simula latencia/fallos en una dependencia critica
+# (la pasarela de pago) y verifica que el CB protege al sistema.
 #
 # Hipotesis (informe Fase 1, seccion 18.5):
-# - Tras 5 fallos en 60s, el CB pasa a OPEN
-# - Mientras OPEN, las llamadas se rechazan inmediato sin tocar la pasarela
-# - El checkout completo con CB abierto degrada a PAGO_PENDIENTE
-# - Reset admin restaura CLOSED y todo vuelve a funcionar
+#   1. Tras 5 fallos en 60s, el CB pasa a estado OPEN.
+#   2. Mientras OPEN, las llamadas se rechazan inmediato con HTTP 503 sin
+#      tocar la pasarela (proteccion al sistema).
+#   3. El checkout con CB abierto devuelve 503 (codigo payment_unavailable)
+#      al cliente y libera la reserva de stock (compensacion SAGA).
+#   4. NO se crea Order falsa en estado PAID si la pasarela esta caida.
+#   5. Reset admin (POST /payments/circuit/reset) restaura CLOSED y el
+#      sistema vuelve a operar normal.
+#
+# Procedimiento:
+#   1. Reset CB previo (estado limpio).
+#   2. Disparar 5 charges con monto X.88 (el mock devuelve 500 con esos montos).
+#   3. Verificar CB en OPEN con failures>=5.
+#   4. Intentar charge nuevo → debe devolver 503 en <500ms (sin tocar mock).
+#   5. Intentar checkout completo → debe devolver 503/payment_unavailable.
+#   6. Reset admin del CB → verificar CLOSED.
+#   7. Charge nuevo con monto .00 → APPROVED (sistema recuperado).
+#
+# Salida esperada: 9 PASS / 0 FAIL en condiciones normales.
+# ============================================================================
 
 set -u
 DIR="$(cd "$(dirname "$0")/.." && pwd)"

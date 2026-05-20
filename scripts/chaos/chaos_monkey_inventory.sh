@@ -1,14 +1,34 @@
 #!/usr/bin/env bash
+# ============================================================================
 # Chaos Monkey: detener Inventory durante un checkout activo.
+# ============================================================================
+#
+# Inspirado en el Chaos Monkey original de Netflix (Simian Army, 2011). Este
+# script simula la caida de un microservicio critico (Inventory) y verifica
+# que el sistema completo NO se rompe — que degrada elegantemente y se
+# recupera automaticamente.
 #
 # Hipotesis (informe Fase 1, seccion 18.4):
-# - El catalogo sigue respondiendo (modo degradado)
-# - El checkout que requiere Inventory falla controlado con 4xx/5xx
-#   y la orden queda en SIN_STOCK / PAGO_PENDIENTE, NO en PAID falso
-# - Al restaurar Inventory, el sistema vuelve a operar normal
+#   1. El catalogo sigue respondiendo (modo degradado: inventory_available=false).
+#   2. El checkout que requiere Inventory falla controlado con HTTP 503.
+#   3. La orden NO queda en PAID falso (no se crea Order sin reserva confirmada).
+#   4. Tras restaurar Inventory, el sistema vuelve a operar normal sin
+#      intervencion manual.
+#
+# Procedimiento:
+#   1. docker compose stop inventory-service
+#   2. Hacer GET /catalog → debe responder 200 con inventory_available=false
+#   3. Intentar POST /checkout → debe devolver 503
+#   4. Verificar que NO se creo Order persistida
+#   5. docker compose start inventory-service
+#   6. Esperar healthcheck
+#   7. Repetir checkout → debe completar exitoso
 #
 # Uso:
 #   ./scripts/chaos/chaos_monkey_inventory.sh
+#
+# Salida esperada: 12 PASS / 0 FAIL en condiciones normales.
+# ============================================================================
 
 set -u
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
