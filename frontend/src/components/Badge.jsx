@@ -1,6 +1,16 @@
 /**
- * Badge — color-coded status label.
- * variant: 'success' | 'error' | 'warning' | 'info' | 'neutral' | 'brand' | 'accent'
+ * Componente Badge: etiqueta de estado con color.
+ *
+ * Uso: <Badge variant="success">Aprobado</Badge>
+ *
+ * Props:
+ *   - children: contenido textual de la etiqueta
+ *   - variant: paleta de color a aplicar (mapeada a clases CSS .badge-*)
+ *   - dot: si true, muestra un punto del color junto al texto (estilo
+ *     "indicador de estado" como en Slack/Discord)
+ *
+ * Las variants disponibles estan definidas en global.css:
+ *   success | error | warning | info | neutral | brand | accent
  */
 export default function Badge({ children, variant = 'neutral', dot = false }) {
   return (
@@ -59,11 +69,19 @@ const PAYMENT_STATUS = {
   pendiente: { variant: 'warning', label: 'Pendiente' },
 };
 
+/**
+ * Helper especifico para estados de pedido. Mapea el status (PAID, ENVIADO,
+ * etc.) al variant y label correctos. Si el status es desconocido, muestra
+ * el string raw como fallback.
+ */
 export function OrderStatusBadge({ status }) {
   const cfg = ORDER_STATUS[status] || { variant: 'neutral', label: status };
   return <Badge variant={cfg.variant} dot>{cfg.label}</Badge>;
 }
 
+/**
+ * Helper especifico para estados de pago (APPROVED, REJECTED, etc.).
+ */
 export function PaymentStatusBadge({ status }) {
   const cfg = PAYMENT_STATUS[status] || { variant: 'neutral', label: status };
   return <Badge variant={cfg.variant} dot>{cfg.label}</Badge>;

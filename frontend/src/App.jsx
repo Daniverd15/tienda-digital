@@ -1,3 +1,17 @@
+/**
+ * Componente raiz de la SPA: configura el router, los providers globales y el layout.
+ *
+ * Responsabilidades:
+ *  - Envuelve toda la app en BrowserRouter (React Router v6) + AuthProvider
+ *    (sesion) + ToastProvider (notificaciones flotantes).
+ *  - Carga la configuracion visual de la tienda (colores corporativos)
+ *    desde GET /store/settings al iniciar (StoreThemeProvider).
+ *  - Renderiza Navbar y Footer en todas las paginas (excepto /admin, donde
+ *    el footer se oculta porque AdminLayout tiene su propio sidebar).
+ *  - Define todas las rutas: publicas, autenticadas (con ProtectedRoute)
+ *    y admin (con ProtectedRoute role="admin").
+ *  - Fallback * → redirige a / (home).
+ */
 import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
@@ -27,6 +41,13 @@ import Register from './pages/Register';
 import ProtectedRoute from './routes/ProtectedRoute';
 import api from './api/client';
 
+/**
+ * Inyecta los colores corporativos en variables CSS (--brand-500 etc.) leyendo
+ * GET /store/settings al montar. Permite que el admin cambie el color
+ * primario desde el panel y se refleje en TODA la SPA al refrescar.
+ *
+ * No retorna JSX (return null). Su unico side-effect es modificar el :root.
+ */
 function StoreThemeProvider() {
   useEffect(() => {
     api.get('/store/settings').then(({ data }) => {
@@ -45,6 +66,10 @@ function StoreThemeProvider() {
   return null;
 }
 
+/**
+ * Wrapper del footer que lo oculta en las rutas /admin/* (donde se usa
+ * AdminLayout que tiene su propio sidebar y no necesita footer publico).
+ */
 function FooterWrapper() {
   const { pathname } = useLocation();
   if (pathname.startsWith('/admin')) return null;
