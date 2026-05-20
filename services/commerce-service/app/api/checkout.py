@@ -65,12 +65,10 @@ def checkout(
     discount = Decimal("0")
     total = max(Decimal("0"), subtotal + additional - discount)
 
-    # 2. Crear orden CREATED
-    code = (
-        f"ORD-{datetime.now().strftime('%Y%m%d')}-{(idempotency_key or uuid4().hex)[:8].upper()}"
-        if idempotency_key
-        else _new_order_code()
-    )
+    # 2. Crear orden CREATED. El order_code SIEMPRE usa uuid4 para evitar
+    # colisiones cuando la misma Idempotency-Key llega de usuarios distintos
+    # (la idempotencia es por (user_id, idempotency_key), no por order_code).
+    code = _new_order_code()
     order = Order(
         order_code=code, user_id=user_id, status="CREATED", payment_status="PENDING",
         subtotal=subtotal, additional_costs=additional, discount=discount, total=total,

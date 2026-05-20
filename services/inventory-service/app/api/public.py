@@ -30,6 +30,36 @@ def get_variants_by_product(product_id: int, db: Session = Depends(get_db)):
     return [serialize_variant_public(v) for v in variants]
 
 
+@router.get("/variants/by-ids")
+def variants_by_ids(ids: str = Query(..., description="ids separados por coma"),
+                    db: Session = Depends(get_db)):
+    """Detalle (publico) de variantes por ids, util para Commerce al calcular COGS.
+
+    NOTA: este endpoint DEBE declararse antes que /variants/{variant_id}
+    porque FastAPI matchea en orden y "by-ids" no es un int valido.
+    """
+    try:
+        id_list = [int(x) for x in ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(422, "ids debe ser una lista separada por coma de enteros.")
+    if not id_list:
+        return []
+    rows = db.query(ProductVariant).filter(ProductVariant.id.in_(id_list)).all()
+    return [
+        {
+            "id": v.id,
+            "product_id": v.product_id,
+            "sku": v.sku,
+            "color": v.color,
+            "color_hex": v.color_hex,
+            "size": v.size,
+            "cost": float(v.cost or 0),
+            "price": float(v.price or 0),
+        }
+        for v in rows
+    ]
+
+
 @router.get("/variants/{variant_id}")
 def get_variant(variant_id: int, db: Session = Depends(get_db)):
     v = db.query(ProductVariant).filter(ProductVariant.id == variant_id).first()
@@ -69,27 +99,3 @@ def stock_summary(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/variants/by-ids")
-def variants_by_ids(ids: str = Query(..., description="ids separados por coma"),
-                    db: Session = Depends(get_db)):
-    """Detalle (publico) de variantes por ids, util para Commerce al calcular COGS."""
-    try:
-        id_list = [int(x) for x in ids.split(",") if x.strip()]
-    except ValueError:
-        raise HTTPException(422, "ids debe ser una lista separada por coma de enteros.")
-    if not id_list:
-        return []
-    rows = db.query(ProductVariant).filter(ProductVariant.id.in_(id_list)).all()
-    return [
-        {
-            "id": v.id,
-            "product_id": v.product_id,
-            "sku": v.sku,
-            "color": v.color,
-            "color_hex": v.color_hex,
-            "size": v.size,
-            "cost": float(v.cost or 0),
-            "price": float(v.price or 0),
-        }
-        for v in rows
-    ]
