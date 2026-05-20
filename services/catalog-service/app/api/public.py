@@ -1,7 +1,45 @@
 """Endpoints publicos del Catalog Service.
 
-Patron Cache-Aside con Redis y TTL. Si Redis falla, se sirve desde MySQL
-directamente (degradacion). La invalidacion se hace desde los endpoints admin.
+================================================================================
+PROPOSITO
+================================================================================
+Sirven el catalogo de la tienda al frontend SIN requerir autenticacion.
+Cualquier visitante (autenticado o no) puede:
+
+  GET /catalog          → overview (settings + mensajes + categorias + destacados)
+  GET /store/settings   → identidad visual de la tienda (logo, colores)
+  GET /store/messages   → mensajes informativos activos
+  GET /categories       → categorias activas y no archivadas
+  GET /products         → listado de productos con filtros (q, category_id, precio)
+  GET /products/{id}    → detalle de producto + variantes enriquecidas
+
+================================================================================
+PATRON CACHE-ASIDE
+================================================================================
+Cada endpoint:
+  1. Intenta leer desde Redis con una clave derivada de los parametros.
+  2. Si HIT → devuelve el cached (latencia <1ms).
+  3. Si MISS → consulta MySQL, serializa el resultado, lo guarda en Redis
+     con TTL apropiado y devuelve.
+
+TTLs configurados:
+  - SETTINGS:        300s (cambia poco — solo cuando admin edita la tienda)
+  - CATEGORIES:      300s (idem)
+  - PRODUCTS_LIST:    60s (stock cambia con cada compra)
+  - PRODUCT_DETAIL:   60s (stock + variantes pueden cambiar)
+
+Cuando admin edita algo, los endpoints /admin/* llaman a cache.invalidate_prefix()
+para invalidar las claves afectadas inmediatamente (no esperan al TTL).
+
+Si Redis cae: todos los GET caen a MySQL (modo degradado).
+
+================================================================================
+ENRIQUECIMIENTO CON INVENTORY
+================================================================================
+GET /products llama a Inventory.get_stock_summary() para enriquecer cada
+producto con `stock` y `variant_count`. Si Inventory cae, los productos se
+devuelven con `inventory_available=False` y el frontend muestra "Consultar"
+en vez de "AGOTADO" (no engañar al cliente con info no confiable).
 """
 from datetime import date
 

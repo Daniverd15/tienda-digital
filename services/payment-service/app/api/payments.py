@@ -1,4 +1,29 @@
-"""Endpoints de pagos. Consumido por Commerce durante checkout."""
+"""Endpoints de pagos. Consumido por Commerce durante el checkout.
+
+================================================================================
+PROPOSITO
+================================================================================
+Microservicio Payment expone tres familias de endpoints:
+
+  - PUBLICOS (autenticados): POST /payments, GET /payments/{id},
+    GET /payments/by-order/{order_id}, POST /payments/refund.
+  - ADMIN: GET /circuit/state, POST /circuit/reset (inspeccion + recovery del CB).
+  - RECONCILIACION: POST /payments/{id}/reconcile (reintenta un PENDING).
+
+Tras cada cobro se persiste un Payment con su transaction_reference y status,
+y un PaymentAttempt por cada intento (incluyendo reintentos del worker
+reconciler). El CB (gateway_client.charge) protege contra fallos en cascada
+de la pasarela.
+
+================================================================================
+ESTADOS DE UN PAYMENT
+================================================================================
+  - APPROVED → pasarela aprobo. Commerce confirma stock y crea Order(PAID).
+  - REJECTED → pasarela rechazo (fondos insuficientes, etc.). Commerce libera reserva.
+  - PENDING  → pasarela no respondio definitivo (timeout, CB open). El worker
+               reconciler lo retomara. Commerce libera reserva tambien.
+  - FAILED   → error inesperado. Similar a PENDING.
+"""
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
