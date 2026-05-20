@@ -1,3 +1,17 @@
+/**
+ * Pagina del catalogo publico (/catalogo).
+ *
+ * Muestra la grilla de productos disponibles con filtros: busqueda por texto,
+ * categoria, rango de precio y "solo con stock". El filtro de stock se aplica
+ * en cliente sobre los datos que devuelve /api/products (que ya trae el
+ * campo `stock` enriquecido desde Inventory por el Catalog Service).
+ *
+ * Soporta deep-link por categoria: /catalogo?categoria=3 selecciona la
+ * categoria automaticamente.
+ *
+ * Renderiza con <ProductCard> que muestra el overlay AGOTADO con efecto
+ * grisaceo cuando inventory_available=true && stock=0.
+ */
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/client';

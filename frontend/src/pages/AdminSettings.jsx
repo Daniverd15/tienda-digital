@@ -1,3 +1,15 @@
+/**
+ * Panel de Configuracion de la tienda (/admin/configuracion).
+ *
+ * Permite al admin editar:
+ *  - Identidad visual: nombre comercial, logo, colores primarios, banner.
+ *  - Datos de contacto: email, telefono.
+ *  - Parametros: moneda, umbral de stock minimo.
+ *  - Mensajes informativos visibles en la tienda (horarios, politicas, avisos).
+ *
+ * Al guardar, invalida el cache de Redis para que los cambios se vean
+ * inmediato en la vitrina publica.
+ */
 import { useEffect, useRef, useState } from 'react';
 import { ImagePlus, Megaphone, Palette, Phone, Settings, ShoppingBag, Trash2, Plus } from 'lucide-react';
 import api from '../api/client';

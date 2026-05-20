@@ -1,3 +1,15 @@
+/**
+ * Dashboard inicial del panel admin (/admin).
+ *
+ * Resumen general del negocio:
+ *  - KPIs: ventas brutas, pedidos totales, clientes registrados, utilidad neta
+ *  - Grafica de productos mas vendidos (barras)
+ *  - Grafica de pedidos por estado (torta)
+ *  - Tabla de pedidos recientes
+ *  - Alertas de stock minimo
+ *
+ * Consulta multiples endpoints en paralelo (finance, orders, alerts, customers).
+ */
 import {
   BarChart,
   Bar,

@@ -1,3 +1,34 @@
+/**
+ * Pagina de Finanzas del admin (/admin/finanzas).
+ *
+ * ============================================================================
+ * 3 TABS
+ * ============================================================================
+ *   - Dashboard: KPIs financieros + graficos (lineas, torta, barras) + tablas
+ *   - Empleados: CRUD de empleados (afecta calculo de nomina)
+ *   - Gastos:    CRUD de gastos operativos (afecta utilidad neta)
+ *
+ * ============================================================================
+ * CALCULOS FINANCIEROS
+ * ============================================================================
+ * Se consultan a GET /admin/finance/summary?granularity=day|month|year
+ * con un rango de fechas opcional. El backend devuelve:
+ *   - gross_sales:    SUM(Order.total) en estados operativos
+ *   - cogs:           SUM(OrderItem.unit_cost x qty) — snapshot al checkout
+ *   - gross_margin:   gross_sales - cogs
+ *   - operating_expenses, payroll
+ *   - net_profit:     gross_margin - operating_expenses - payroll
+ *   - timeseries[]:   misma agregacion por dia/mes/año
+ *
+ * ============================================================================
+ * REPORTES EXPORTABLES
+ * ============================================================================
+ * - CSV: blob con BOM UTF-8 (Excel-friendly) que incluye KPIs, timeseries,
+ *   top productos y gastos por tipo.
+ * - PDF: abre una ventana HTML imprimible con CSS profesional (hero
+ *   corporativo, A4, KPIs visuales, badge "Rentable"/"En perdidas"). El
+ *   usuario imprime o guarda como PDF desde el dialogo del navegador.
+ */
 import { useEffect, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,

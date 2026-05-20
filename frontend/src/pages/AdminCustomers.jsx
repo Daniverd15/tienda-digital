@@ -1,3 +1,13 @@
+/**
+ * Panel de Clientes del admin (/admin/clientes).
+ *
+ * Lista los clientes registrados con sus datos basicos. Permite:
+ *  - Ver el historial de pedidos de cada cliente.
+ *  - Buscar por nombre/email/telefono.
+ *
+ * Solo lectura: NO se permite editar customers desde aqui (el cliente
+ * mismo edita su perfil en /perfil cuando esta autenticado).
+ */
 import { useState } from 'react';
 import { Eye, Search, ShieldOff, ShieldCheck } from 'lucide-react';
 import api from '../api/client';

@@ -1,3 +1,12 @@
+/**
+ * Pagina de historial de pedidos del cliente (/mis-pedidos).
+ *
+ * Lista todos los pedidos del usuario autenticado con KPIs en cabecera
+ * (total pedidos, entregados, en camino, total invertido). Cada fila es un
+ * link al detalle del pedido (/pedidos/:id).
+ *
+ * Si no hay pedidos, muestra un empty-state con CTA al catalogo.
+ */
 import { Link } from 'react-router-dom';
 import { Bell, Package, ShoppingBag, ChevronRight } from 'lucide-react';
 import api from '../api/client';

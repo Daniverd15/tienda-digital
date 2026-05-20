@@ -1,3 +1,14 @@
+/**
+ * Panel de Reseñas del admin (/admin/resenas).
+ *
+ * Por defecto abre filtrado en "Pendientes" (las que requieren moderacion).
+ * El admin puede:
+ *  - Aprobar (PATCH /admin/reviews/{id}/approve) → publica + recalcula rating
+ *  - Eliminar/Rechazar (DELETE /admin/reviews/{id}) → quita la reseña
+ *
+ * Si la reseña aprobada se elimina despues, el sistema recalcula el rating
+ * descontandola.
+ */
 import { useState } from 'react';
 import { CheckCircle, Search, Star, XCircle } from 'lucide-react';
 import api from '../api/client';

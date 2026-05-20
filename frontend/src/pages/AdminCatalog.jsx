@@ -1,3 +1,18 @@
+/**
+ * Panel de Catalogo e Inventario del admin (/admin/catalogo).
+ *
+ * Tabs:
+ *  - Categorias: CRUD de categorias del catalogo
+ *  - Productos:  CRUD de productos (con imagen, descripcion, precio base)
+ *  - Variantes:  CRUD de variantes Nike-style (color + talla + costo + precio
+ *                + stock). Incluye color picker visual con presets.
+ *                Calcula margen estimado en vivo (precio - costo).
+ *  - Inventario: registrar movimientos manuales (entry/exit/adjust) y ver
+ *                alertas de stock minimo.
+ *
+ * Las llamadas cruzan Catalog Service (categorias, productos) y Inventory
+ * Service (variantes, movimientos, alertas).
+ */
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Edit2, ImagePlus, Package, Plus, Tag, Trash2, Warehouse } from 'lucide-react';
 import api from '../api/client';

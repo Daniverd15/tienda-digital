@@ -1,3 +1,15 @@
+/**
+ * Pagina de Registro (/registro).
+ *
+ * Formulario para crear cuenta de cliente nuevo. Valida en cliente y en
+ * servidor:
+ *  - Email unico (case-insensitive)
+ *  - Contrasena fuerte (>=8, mayus, minus, digito, simbolo)
+ *  - Telefono numerico
+ *
+ * Tras registro exitoso: persiste tokens, hace auto-login y redirige al
+ * catalogo. El backend ademas envia un correo de bienvenida via SMTP.
+ */
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShieldCheck, UserPlus } from 'lucide-react';

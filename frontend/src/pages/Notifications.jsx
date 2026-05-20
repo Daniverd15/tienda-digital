@@ -1,3 +1,10 @@
+/**
+ * Pagina de notificaciones del cliente (/notificaciones).
+ *
+ * Lista las notificaciones in-app del usuario (eventos del pedido,
+ * compras exitosas, cambios de estado). Permite marcar como leida
+ * individualmente o todas a la vez (PATCH /notifications/read-all).
+ */
 import api from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 

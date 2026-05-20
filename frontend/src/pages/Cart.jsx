@@ -1,3 +1,13 @@
+/**
+ * Pagina del carrito (/carrito).
+ *
+ * Muestra los items que el cliente agrego, permite cambiar cantidades,
+ * eliminar items o vaciar el carrito. Al continuar, va al checkout.
+ *
+ * El backend devuelve para cada item `available_stock` y `has_enough_stock`
+ * (consulta en tiempo real a Inventory). Mostramos warning visual si algun
+ * item ya no tiene stock disponible para la cantidad solicitada.
+ */
 import { Link } from 'react-router-dom';
 import { Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react';
 import api from '../api/client';

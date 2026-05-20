@@ -1,3 +1,13 @@
+/**
+ * Pagina para dejar reseña de un producto entregado (/resenas/:orderId/:productId).
+ *
+ * Valida en backend que:
+ *  - El usuario tenga el pedido ENTREGADO con ese producto.
+ *  - No haya reseñado ya esa combinacion (user, product, order).
+ *
+ * La reseña entra como pendiente (approved=false). El admin la modera
+ * antes de que se publique al publico y se actualice el rating del producto.
+ */
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Star, Send } from 'lucide-react';

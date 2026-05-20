@@ -1,13 +1,28 @@
+/**
+ * Pagina de resultado del pago (/pago).
+ *
+ * Es la PASARELA SIMULADA que el cliente ve despues del checkout. Recibe en
+ * location.state los datos del carrito + datos de entrega capturados y
+ * dispara el POST /api/checkout al backend.
+ *
+ * Comportamiento del endpoint backend (politica MVP):
+ *   - 200/201 → SAGA exitosa, Order creada en estado PAID.
+ *   - 409     → out_of_stock (algun item sin stock)
+ *   - 402     → payment_rejected (pasarela rechazo el pago)
+ *   - 503     → payment_unavailable (Circuit Breaker abierto o pasarela caida)
+ *   - 502     → payment_not_approved / inventory_error
+ *
+ * Para cada codigo de error mostramos un icono + mensaje + accion sugerida
+ * (intentar de nuevo, volver al carrito, ir al catalogo).
+ *
+ * Si la SAGA termina con stock insuficiente, mostramos al cliente la lista
+ * exacta de variantes que se quedaron sin stock para que pueda ajustar.
+ */
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { CheckCircle, ShoppingCart, XCircle, AlertTriangle, PackageX, CreditCard } from 'lucide-react';
 import api from '../api/client';
 import { useToast } from '../context/ToastContext';
-
-// El POST /api/checkout ahora SOLO devuelve 200/201 si la SAGA termino en PAID.
-// Cualquier otro caso devuelve un error HTTP con detalle estructurado y NO
-// crea Order (vive en failed_checkout_attempts para auditoria). El frontend
-// debe presentar al cliente un mensaje claro segun el codigo.
 
 const ERROR_CONFIG = {
   out_of_stock:        { icon: <PackageX size={36} />,      title: 'Sin stock',                 sub: 'Algunos productos del carrito ya no tienen stock. Revísalo y vuelve a intentar.', variant: 'error' },

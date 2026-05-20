@@ -1,3 +1,17 @@
+/**
+ * Pagina de Login (/login).
+ *
+ * Permite al usuario autenticarse con email + contrasena. Tras login exitoso:
+ *   - Si vino de una ruta protegida (state.from), vuelve alli.
+ *   - Si es admin → redirige a /admin (panel administrativo).
+ *   - Si es customer → redirige a /catalogo (vitrina).
+ *
+ * Si un admin venia de una ruta cliente (mis-pedidos, carrito), lo enviamos
+ * directo al panel /admin en vez de mantenerlo en zona cliente.
+ *
+ * Incluye botones de "credenciales seed" para demostracion academica:
+ * llenan el form con los datos del admin y cliente de prueba.
+ */
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LogIn, ShieldCheck } from 'lucide-react';

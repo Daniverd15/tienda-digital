@@ -1,3 +1,13 @@
+/**
+ * Pagina de Checkout (/checkout).
+ *
+ * Captura los datos de entrega y facturacion antes del pago. Calcula el
+ * total local desde el carrito (consulta GET /cart). Al confirmar, redirige
+ * a /pago donde se ejecuta la SAGA del backend.
+ *
+ * La SAGA real (reserve + charge + confirm) corre en /pago (PaymentResult).
+ * Este componente solo es el formulario previo.
+ */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, User } from 'lucide-react';

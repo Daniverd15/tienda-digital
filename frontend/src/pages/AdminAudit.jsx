@@ -1,3 +1,31 @@
+/**
+ * Pagina de Bitacora de Auditoria (/admin/auditoria).
+ *
+ * ============================================================================
+ * PROPOSITO
+ * ============================================================================
+ * Unifica DOS fuentes de eventos para que el admin pueda reconstruir la
+ * "pelicula" completa de una sesion de usuario:
+ *
+ *   1. Eventos de PEDIDOS (commerce_db.OrderAuditLog): checkout iniciado,
+ *      pago aprobado/rechazado, transiciones de estado, etc.
+ *   2. Eventos de ACCESOS (auth_db.AccessLog): login, login_failed, register,
+ *      refresh, logout con IP y user_agent.
+ *
+ * El correlation_id propagado por el gateway permite cruzar eventos de los
+ * dos contextos. Click sobre el chip de correlation_id filtra la tabla
+ * para mostrar SOLO los eventos de esa sesion.
+ *
+ * ============================================================================
+ * KPIs DESTACADOS
+ * ============================================================================
+ * - Total de eventos
+ * - Pagos aprobados (mes)
+ * - Pagos rechazados / compensaciones SAGA
+ * - Logins fallidos (util para detectar abuso / brute-force)
+ *
+ * Soporta exportacion a CSV con BOM UTF-8 para Excel.
+ */
 import { useEffect, useState } from 'react';
 import { Search, Shield, Activity, User, ShoppingBag, Filter, Download, Link2, Copy, MapPin } from 'lucide-react';
 import api from '../api/client';

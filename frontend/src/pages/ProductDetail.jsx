@@ -1,3 +1,33 @@
+/**
+ * Pagina de detalle de producto (/productos/:id).
+ *
+ * ============================================================================
+ * SELECTOR NIKE-STYLE
+ * ============================================================================
+ * Este componente implementa el selector de variantes estilo Nike: primero
+ * el cliente elige COLOR (bolitas circulares con el hex real), luego elige
+ * TALLA (botones rectangulares con stock por variante).
+ *
+ * Las variantes vienen del backend con (color, color_hex, size, stock).
+ * Las agrupamos por `colorKey` (nombre normalizado) en `groupedByColor` con
+ * useMemo. Al elegir color → mostramos las tallas disponibles de ese color.
+ *
+ * ============================================================================
+ * AUTO-SELECCION DE VARIANTE
+ * ============================================================================
+ * - Si el producto tiene tallas: al cargar, autoseleccionamos el primer
+ *   color con stock; el cliente debe elegir talla manualmente.
+ * - Si el producto NO tiene tallas (ej. una mochila con solo color): al
+ *   elegir color, autoseleccionamos directamente la variante (ya que solo
+ *   hay una por color).
+ *
+ * ============================================================================
+ * FALLBACK DE COLOR HEX
+ * ============================================================================
+ * Si una variante vieja no tiene color_hex en BD, intentamos derivarlo del
+ * nombre del color usando KNOWN_COLORS (mapa de nombres comunes). Si tampoco
+ * matchea, mostramos gris #9ca3af como fallback.
+ */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ShoppingCart, Star, Truck, Shield, RotateCcw } from 'lucide-react';

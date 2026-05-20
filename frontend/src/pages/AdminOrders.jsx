@@ -1,3 +1,17 @@
+/**
+ * Panel de Pedidos del admin (/admin/pedidos).
+ *
+ * Lista TODOS los pedidos del sistema con filtros por estado y busqueda
+ * por codigo/email. Filtra a estados operativos (PAID, EN_PREPARACION,
+ * ENVIADO, ENTREGADO, CANCELADA) — los fallidos (rechazado/sin stock)
+ * NO aparecen aqui sino en la bitacora de auditoria.
+ *
+ * Permite transicionar el estado del pedido siguiendo la maquina de estados:
+ *   PAID → EN_PREPARACION → ENVIADO → ENTREGADO
+ *   PAID/EN_PREPARACION → CANCELADA (cancelacion antes del envio)
+ *
+ * Cada transicion dispara: history + audit_log + notificacion + correo SMTP.
+ */
 import { useState } from 'react';
 import { Search, RefreshCw, Eye } from 'lucide-react';
 import api from '../api/client';

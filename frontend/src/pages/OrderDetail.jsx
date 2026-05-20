@@ -1,3 +1,22 @@
+/**
+ * Pagina de detalle de pedido del cliente (/pedidos/:id).
+ *
+ * Muestra:
+ *  - Datos del pedido (codigo, estado, badges).
+ *  - Items del pedido (tabla con producto, variante, cantidad, total).
+ *  - Datos de entrega (snapshot del checkout).
+ *  - Resumen de pago (subtotal, descuentos, total).
+ *  - Timeline visual del estado: Pago → Preparacion → Enviado → Entregado.
+ *  - Boton "Dejar reseña" en cada item entregado (si aplica + no reseñado).
+ *
+ * El componente OrderTimeline calcula el indice actual segun el status del
+ * pedido y muestra los pasos pasados (verde) y el actual (naranja) con la
+ * fecha de cada transicion tomada del history del pedido.
+ *
+ * Carga en paralelo /reviews/mine para saber que productos del pedido ya
+ * tienen reseña del usuario (y reemplazar el boton "Dejar reseña" por un
+ * badge "Reseñado").
+ */
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {

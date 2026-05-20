@@ -1,3 +1,15 @@
+/**
+ * Pagina Home / Landing publica (/).
+ *
+ * Carga el overview del catalogo via GET /catalog (cacheado en Redis):
+ *  - Configuracion visual (logo, banner, colores)
+ *  - Mensajes informativos activos (avisos, promos)
+ *  - Categorias activas con sus links a /catalogo?categoria=X
+ *  - 6 productos destacados (los mas recientes publicados)
+ *
+ * Sirve como punto de entrada para visitantes anonimos. Tiene CTAs visibles
+ * al catalogo completo y al login/registro.
+ */
 import { Link } from 'react-router-dom';
 import { ArrowRight, Package, ShieldCheck, Star, Truck, Zap } from 'lucide-react';
 import api from '../api/client';
