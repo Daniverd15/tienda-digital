@@ -8,11 +8,16 @@ export default function ProductCard({ product }) {
   const inventoryAvailable = product.inventory_available !== false;
   const variantCount = Number(product.variant_count || 0);
   const stock = Number(product.stock || 0);
-  // Solo marcamos AGOTADO si Inventory confirmo: hay variantes y stock=0.
-  // Sin variantes registradas o sin Inventory: mostramos "Consultar" en vez de "AGOTADO".
-  const stockKnown = inventoryAvailable && variantCount > 0;
-  const isOutOfStock = stockKnown && stock <= 0;
-  const isLowStock = stockKnown && stock > 0 && stock <= 5;
+
+  // Tres estados desde la perspectiva del cliente:
+  //   - Inventory caido (inventoryAvailable=false): no podemos confirmar el
+  //     stock; mostramos "Consultar" sin overlay para no marcarlo como
+  //     agotado falsamente.
+  //   - Inventory OK pero (sin variantes O stock=0): el cliente NO puede
+  //     comprarlo, asi que va el efecto AGOTADO completo (grayscale + sello).
+  //   - Inventory OK + stock > 0: producto disponible, sin overlay.
+  const isOutOfStock = inventoryAvailable && (variantCount === 0 || stock <= 0);
+  const isLowStock = inventoryAvailable && variantCount > 0 && stock > 0 && stock <= 5;
 
   return (
     <article className={`product-card${isOutOfStock ? ' product-card-out' : ''}`}>
@@ -36,7 +41,7 @@ export default function ProductCard({ product }) {
         <div className="product-meta">
           <strong>${price}</strong>
           <span>
-            {!stockKnown ? (
+            {!inventoryAvailable ? (
               <>
                 <Package size={13} />
                 Consultar
