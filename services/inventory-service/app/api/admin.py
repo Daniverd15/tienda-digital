@@ -28,6 +28,7 @@ router = APIRouter(prefix="/admin", tags=["Inventario administracion"])
 
 
 def _serialize_alert(alert: LowStockAlert, product_cache: dict[int, dict | None]) -> dict:
+    """Enriquece una alerta con datos de variante y producto desde Catalog."""
     variant = alert.variant
     product_id = variant.product_id if variant else None
     product = None
@@ -52,6 +53,7 @@ def _serialize_alert(alert: LowStockAlert, product_cache: dict[int, dict | None]
 
 
 def _sync_low_stock_alert(db: Session, variant: ProductVariant, default_threshold: int = 5) -> None:
+    """Crea/resuelve alertas cuando el stock cruza el umbral configurado."""
     alert = (
         db.query(LowStockAlert)
         .filter(LowStockAlert.variant_id == variant.id, LowStockAlert.resolved.is_(False))
@@ -81,6 +83,7 @@ def list_variants(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Lista variantes con filtros opcionales para administracion."""
     qry = db.query(ProductVariant)
     if product_id:
         qry = qry.filter(ProductVariant.product_id == product_id)
@@ -95,6 +98,7 @@ def create_variant(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Crea una variante validando producto en Catalog y duplicados locales."""
     # Validacion cross-service: existe el producto en Catalog?
     exists = product_exists(payload.product_id)
     if exists is False:
@@ -139,6 +143,7 @@ def update_variant(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Actualiza atributos de una variante sin modificar stock reservado."""
     v = db.query(ProductVariant).filter(ProductVariant.id == variant_id).first()
     if not v:
         raise HTTPException(404, "Variante no encontrada.")
@@ -159,6 +164,7 @@ def archive_variant(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Desactiva una variante sin borrar movimientos/reservas historicas."""
     v = db.query(ProductVariant).filter(ProductVariant.id == variant_id).first()
     if not v:
         raise HTTPException(404, "Variante no encontrada.")
@@ -179,6 +185,7 @@ def list_movements(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Lista movimientos de stock para auditoria o soporte."""
     qry = db.query(StockMovement)
     if variant_id:
         qry = qry.filter(StockMovement.variant_id == variant_id)
@@ -245,6 +252,7 @@ def list_alerts(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Lista alertas abiertas o historicas de bajo stock."""
     if not include_resolved:
         open_alerts = (
             db.query(LowStockAlert)
@@ -304,6 +312,7 @@ def resolve_alert(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Marca una alerta de bajo stock como resuelta manualmente."""
     a = db.query(LowStockAlert).filter(LowStockAlert.id == alert_id).first()
     if not a:
         raise HTTPException(404, "Alerta no encontrada.")

@@ -16,10 +16,12 @@ bearer_scheme = HTTPBearer(auto_error=False)
 def get_correlation_id(
     x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
 ) -> str:
+    """Propaga el correlation id recibido o crea uno para trazabilidad."""
     return x_correlation_id or uuid4().hex
 
 
 def get_client_meta(request: Request) -> tuple[str | None, str | None]:
+    """Extrae IP y User-Agent para la bitacora de accesos."""
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
     return ip, ua
@@ -29,6 +31,7 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
+    """Valida el access token y carga el usuario activo desde Auth DB."""
     if not credentials:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Autenticacion requerida.")
     try:
@@ -44,6 +47,7 @@ def get_current_user(
 
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency que limita endpoints a usuarios con rol administrador."""
     if current_user.role != "admin":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol administrador requerido.")
     return current_user

@@ -27,11 +27,13 @@ from app.core.database import Base
 
 
 class TimestampMixin:
+    """Campos created_at/updated_at compartidos por entidades editables."""
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class Category(Base, TimestampMixin):
+    """Agrupador comercial de productos visible en navegacion."""
     __tablename__ = "categories"
 
     id = Column(Integer, primary_key=True)
@@ -44,6 +46,7 @@ class Category(Base, TimestampMixin):
 
 
 class Product(Base, TimestampMixin):
+    """Producto base del catalogo; las variantes viven en Inventory."""
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True)
@@ -63,6 +66,7 @@ class Product(Base, TimestampMixin):
 
 
 class ProductImage(Base):
+    """Imagen adicional asociada a la galeria de un producto."""
     __tablename__ = "product_images"
 
     id = Column(Integer, primary_key=True)
@@ -87,6 +91,7 @@ class RatingSummary(Base):
 
 
 class StoreSetting(Base, TimestampMixin):
+    """Configuracion de marca, contacto, moneda y umbral de stock."""
     __tablename__ = "store_settings"
 
     id = Column(Integer, primary_key=True)
@@ -102,6 +107,7 @@ class StoreSetting(Base, TimestampMixin):
 
 
 class InformativeMessage(Base):
+    """Mensaje publico con estado y ventana opcional de vigencia."""
     __tablename__ = "informative_messages"
 
     id = Column(Integer, primary_key=True)

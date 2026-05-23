@@ -49,6 +49,7 @@ def ensure_seed_admin() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Inicializa tablas y seed de admin durante el arranque del servicio."""
     logger.info("Inicializando %s ...", settings.service_name)
     Base.metadata.create_all(bind=engine)
     ensure_seed_admin()
@@ -76,6 +77,7 @@ app.add_middleware(
 
 @app.get("/", tags=["meta"])
 def root() -> dict:
+    """Metadata liviana para verificar que el servicio esta listo."""
     return {"service": settings.service_name, "version": app.version, "status": "ready"}
 
 

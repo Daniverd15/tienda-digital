@@ -1,3 +1,9 @@
+"""Rutas del carrito de compras en el monolito legacy.
+
+Gestiona el carrito abierto por usuario: lectura, agregado, actualizacion,
+eliminacion y validacion de stock antes del checkout. En microservicios esta
+logica se separa hacia Commerce Service, que coordina carrito y SAGA de pago.
+"""
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,6 +20,7 @@ router = APIRouter(prefix="/cart", tags=["Carrito"])
 
 
 def get_open_cart(db: Session, user_id: int) -> Cart:
+    """Obtiene el carrito abierto del usuario o crea uno si aun no existe."""
     cart = (
         db.query(Cart)
         .options(joinedload(Cart.items).joinedload(CartItem.variant).joinedload(ProductVariant.product))
@@ -28,6 +35,7 @@ def get_open_cart(db: Session, user_id: int) -> Cart:
 
 
 def serialize_cart(cart: Cart) -> dict:
+    """Convierte el carrito ORM a JSON estable para la SPA."""
     items = []
     subtotal = Decimal("0")
     for item in cart.items:
@@ -57,6 +65,7 @@ def serialize_cart(cart: Cart) -> dict:
 
 
 def validate_variant(db: Session, variant_id: int, quantity: int) -> ProductVariant:
+    """Valida que la variante exista, este activa/publicada y tenga stock."""
     variant = (
         db.query(ProductVariant)
         .options(joinedload(ProductVariant.product))
@@ -72,6 +81,7 @@ def validate_variant(db: Session, variant_id: int, quantity: int) -> ProductVari
 
 @router.get("")
 def read_cart(current_user: User = Depends(require_customer), db: Session = Depends(get_db)):
+    """Devuelve el carrito actual del cliente autenticado."""
     cart = get_open_cart(db, current_user.id)
     db.commit()
     db.refresh(cart)
@@ -80,6 +90,7 @@ def read_cart(current_user: User = Depends(require_customer), db: Session = Depe
 
 @router.post("/items", status_code=status.HTTP_201_CREATED)
 def add_item(payload: CartItemIn, current_user: User = Depends(require_customer), db: Session = Depends(get_db)):
+    """Agrega una variante al carrito o incrementa su cantidad existente."""
     cart = get_open_cart(db, current_user.id)
     variant = validate_variant(db, payload.variant_id, payload.quantity)
     item = next((cart_item for cart_item in cart.items if cart_item.variant_id == payload.variant_id), None)
@@ -104,6 +115,7 @@ def update_item(
     current_user: User = Depends(require_customer),
     db: Session = Depends(get_db),
 ):
+    """Cambia la cantidad de un item validando disponibilidad actual."""
     cart = get_open_cart(db, current_user.id)
     item = next((cart_item for cart_item in cart.items if cart_item.id == item_id), None)
     if not item:
@@ -127,6 +139,7 @@ def update_item(
 
 @router.delete("/items/{item_id}", response_model=ApiMessage)
 def delete_item(item_id: int, current_user: User = Depends(require_customer), db: Session = Depends(get_db)):
+    """Quita un item del carrito abierto del usuario."""
     cart = get_open_cart(db, current_user.id)
     item = next((cart_item for cart_item in cart.items if cart_item.id == item_id), None)
     if not item:
@@ -139,6 +152,7 @@ def delete_item(item_id: int, current_user: User = Depends(require_customer), db
 
 @router.post("/validate-stock")
 def validate_stock(current_user: User = Depends(require_customer), db: Session = Depends(get_db)):
+    """Revisa el carrito completo antes del checkout y reporta faltantes."""
     cart = get_open_cart(db, current_user.id)
     errors = [
         {
@@ -151,4 +165,3 @@ def validate_stock(current_user: User = Depends(require_customer), db: Session =
         if item.quantity > item.variant.stock
     ]
     return {"valid": len(errors) == 0, "errors": errors}
-

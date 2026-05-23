@@ -13,6 +13,7 @@ router = APIRouter(prefix="/users", tags=["Usuarios"])
 
 @router.get("/me", response_model=UserPublic)
 def get_me(current_user: User = Depends(get_current_user)):
+    """Devuelve el perfil del usuario autenticado."""
     return current_user
 
 
@@ -22,6 +23,7 @@ def update_me(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Actualiza nombre/telefono del usuario autenticado."""
     data = payload.model_dump(exclude_unset=True)
     for field, value in data.items():
         setattr(current_user, field, value)

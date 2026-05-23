@@ -78,6 +78,7 @@ def backfill_unit_cost() -> int:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Inicializa BD, migraciones suaves y backfill financiero best-effort."""
     logger.info("Inicializando %s ...", settings.service_name)
     Base.metadata.create_all(bind=engine)
     soft_migrate()
@@ -111,11 +112,13 @@ app.add_middleware(
 
 @app.get("/", tags=["meta"])
 def root() -> dict:
+    """Metadata liviana para discovery y pruebas manuales."""
     return {"service": settings.service_name, "version": app.version, "status": "ready"}
 
 
 @app.get("/health", tags=["meta"])
 def health() -> dict:
+    """Healthcheck profundo: valida conectividad a MySQL."""
     db_ok = False
     try:
         db = SessionLocal()

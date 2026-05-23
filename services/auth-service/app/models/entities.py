@@ -10,11 +10,13 @@ from app.core.database import Base
 
 
 class TimestampMixin:
+    """Campos de auditoria temporal para entidades de identidad."""
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class User(Base, TimestampMixin):
+    """Cuenta de usuario con rol y estado activo dentro de Auth Service."""
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -30,6 +32,7 @@ class User(Base, TimestampMixin):
 
 
 class RefreshToken(Base):
+    """Refresh token almacenado como hash y revocable por sesion/logout."""
     __tablename__ = "refresh_tokens"
 
     id = Column(Integer, primary_key=True)

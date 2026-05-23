@@ -10,15 +10,18 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class CartItemAdd(BaseModel):
+    """Solicitud para agregar una variante al carrito."""
     variant_id: int
     quantity: int = Field(ge=1)
 
 
 class CartItemUpdate(BaseModel):
+    """Solicitud para actualizar cantidad de una linea de carrito."""
     quantity: int = Field(ge=1)
 
 
 class CartItemPublic(BaseModel):
+    """Linea de carrito enriquecida con snapshot y disponibilidad."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -36,6 +39,7 @@ class CartItemPublic(BaseModel):
 
 
 class CartPublic(BaseModel):
+    """Carrito completo devuelto al frontend."""
     id: int
     user_id: int
     status: str
@@ -50,6 +54,7 @@ class CartPublic(BaseModel):
 
 
 class CheckoutRequest(BaseModel):
+    """Datos de entrega, facturacion y tarjeta para ejecutar la SAGA."""
     delivery_name: str = Field(min_length=2, max_length=160)
     delivery_address: str = Field(min_length=4, max_length=250)
     delivery_city: str = Field(min_length=2, max_length=120)
@@ -60,6 +65,7 @@ class CheckoutRequest(BaseModel):
 
 
 class OrderItemPublic(BaseModel):
+    """Linea de pedido visible para cliente y administrador."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -74,6 +80,7 @@ class OrderItemPublic(BaseModel):
 
 
 class OrderStatusEntry(BaseModel):
+    """Entrada del historial logistico de un pedido."""
     model_config = ConfigDict(from_attributes=True)
 
     from_status: str | None
@@ -84,6 +91,7 @@ class OrderStatusEntry(BaseModel):
 
 
 class OrderPublic(BaseModel):
+    """Vista completa de pedido con items e historial."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -111,6 +119,7 @@ class OrderPublic(BaseModel):
 
 
 class OrderStatusUpdate(BaseModel):
+    """Cambio logistico permitido desde administracion."""
     new_status: str = Field(pattern="^(EN_PREPARACION|ENVIADO|ENTREGADO|CANCELADA)$")
     notes: str | None = Field(default=None, max_length=250)
 
@@ -121,6 +130,7 @@ class OrderStatusUpdate(BaseModel):
 
 
 class ReviewCreate(BaseModel):
+    """Solicitud de resena para un producto comprado y entregado."""
     product_id: int
     order_id: int
     rating: int = Field(ge=1, le=5)
@@ -128,6 +138,7 @@ class ReviewCreate(BaseModel):
 
 
 class ReviewPublic(BaseModel):
+    """Resena serializada para moderacion o detalle publico."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -146,6 +157,7 @@ class ReviewPublic(BaseModel):
 
 
 class NotificationPublic(BaseModel):
+    """Notificacion in-app serializada para el usuario."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -162,6 +174,7 @@ class NotificationPublic(BaseModel):
 
 
 class EmployeeUpsert(BaseModel):
+    """Entrada administrativa para empleados de nomina."""
     name: str = Field(min_length=2, max_length=160)
     document: str = Field(min_length=4, max_length=80)
     position: str = Field(min_length=2, max_length=120)
@@ -170,6 +183,7 @@ class EmployeeUpsert(BaseModel):
 
 
 class EmployeePublic(BaseModel):
+    """Empleado serializado para el panel financiero."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -181,6 +195,7 @@ class EmployeePublic(BaseModel):
 
 
 class ExpenseUpsert(BaseModel):
+    """Entrada administrativa de gastos operativos."""
     expense_type: str = Field(min_length=2, max_length=80)
     description: str = Field(min_length=2, max_length=250)
     amount: float = Field(ge=0)
@@ -189,6 +204,7 @@ class ExpenseUpsert(BaseModel):
 
 
 class ExpensePublic(BaseModel):
+    """Gasto operativo serializado para finanzas."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -202,6 +218,7 @@ class ExpensePublic(BaseModel):
 
 
 class FinanceTimeseriesPoint(BaseModel):
+    """Punto temporal para graficas de ventas, COGS y margen bruto."""
     label: str         # ej. "2026-05-19", "2026-05", "2026"
     gross_sales: float
     cogs: float
@@ -210,6 +227,7 @@ class FinanceTimeseriesPoint(BaseModel):
 
 
 class FinanceSummary(BaseModel):
+    """Resumen financiero calculado para el dashboard administrativo."""
     period_from: date | None
     period_to: date | None
     granularity: str = "month"
@@ -227,6 +245,7 @@ class FinanceSummary(BaseModel):
 
 
 class OrderAuditLogPublic(BaseModel):
+    """Evento de auditoria de pedidos expuesto al administrador."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -239,4 +258,5 @@ class OrderAuditLogPublic(BaseModel):
 
 
 class ApiMessage(BaseModel):
+    """Respuesta generica de confirmacion."""
     message: str

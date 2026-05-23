@@ -13,10 +13,12 @@ bearer_scheme = HTTPBearer(auto_error=False)
 def get_correlation_id(
     x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
 ) -> str:
+    """Propaga el correlation id de entrada o genera uno nuevo."""
     return x_correlation_id or uuid4().hex
 
 
 def _decode(token: str) -> dict:
+    """Decodifica JWT compartido emitido por Auth Service."""
     try:
         return jwt.decode(
             token,
@@ -32,6 +34,7 @@ def _decode(token: str) -> dict:
 def get_current_user_claims(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ) -> dict:
+    """Obtiene claims de un access token valido para rutas protegidas."""
     if not credentials:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Autenticacion requerida.")
     claims = _decode(credentials.credentials)
@@ -50,10 +53,12 @@ def get_current_user_token(
 
 
 def require_admin(claims: dict = Depends(get_current_user_claims)) -> dict:
+    """Exige rol admin segun claims del JWT."""
     if claims.get("role") != "admin":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol administrador requerido.")
     return claims
 
 
 def current_user_id(claims: dict = Depends(get_current_user_claims)) -> int:
+    """Devuelve el id numerico del usuario autenticado."""
     return int(claims["sub"])

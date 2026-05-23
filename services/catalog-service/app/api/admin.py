@@ -55,6 +55,7 @@ ALLOWED_IMAGE_TYPES = {
 
 
 def _invalidate_catalog_cache() -> None:
+    """Invalida lecturas cacheadas despues de una mutacion administrativa."""
     cache.invalidate_prefix("catalog:")
 
 
@@ -63,6 +64,7 @@ async def admin_upload_image(
     file: UploadFile = File(...),
     _: dict = Depends(require_admin),
 ):
+    """Valida, limita y guarda imagenes subidas para productos."""
     if file.content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(422, "Formato no soportado. Usa JPG, PNG o WebP.")
 
@@ -85,6 +87,7 @@ async def admin_upload_image(
 
 @router.get("/categories", response_model=list[CategoryPublic])
 def admin_list_categories(_: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lista categorias para administracion."""
     return db.query(Category).order_by(Category.name.asc()).all()
 
 
@@ -94,6 +97,7 @@ def admin_create_category(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Crea una categoria unica e invalida cache publico."""
     if db.query(Category).filter(Category.name == payload.name).first():
         raise HTTPException(409, "Ya existe una categoria con ese nombre.")
     c = Category(**payload.model_dump())
@@ -111,6 +115,7 @@ def admin_update_category(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Actualiza una categoria existente e invalida cache publico."""
     c = db.query(Category).filter(Category.id == category_id).first()
     if not c:
         raise HTTPException(404, "Categoria no encontrada.")
@@ -151,6 +156,7 @@ def admin_list_products(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Lista productos con busqueda y opcion de incluir archivados."""
     qry = db.query(Product)
     if not include_archived:
         qry = qry.filter(Product.archived.is_(False))
@@ -166,6 +172,7 @@ def admin_create_product(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Crea un producto base y su resumen de rating inicial."""
     cat = db.query(Category).filter(Category.id == payload.category_id).first()
     if not cat:
         raise HTTPException(422, "category_id invalido.")
@@ -186,6 +193,7 @@ def admin_update_product(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Actualiza campos comerciales de producto y valida categoria si cambia."""
     p = db.query(Product).filter(Product.id == product_id).first()
     if not p:
         raise HTTPException(404, "Producto no encontrado.")
@@ -208,6 +216,7 @@ def admin_archive_product(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Archiva y despublica un producto sin borrar su historial."""
     p = db.query(Product).filter(Product.id == product_id).first()
     if not p:
         raise HTTPException(404, "Producto no encontrado.")
@@ -225,6 +234,7 @@ def admin_list_images(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Lista imagenes de galeria asociadas a un producto."""
     return db.query(ProductImage).filter(ProductImage.product_id == product_id).all()
 
 
@@ -236,6 +246,7 @@ def admin_add_image(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Agrega una imagen a la galeria del producto e invalida cache."""
     if not db.query(Product).filter(Product.id == product_id).first():
         raise HTTPException(404, "Producto no encontrado.")
     img = ProductImage(product_id=product_id, **payload.model_dump())
@@ -253,6 +264,7 @@ def admin_delete_image(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Elimina una imagen de galeria y refresca cache publico."""
     img = (
         db.query(ProductImage)
         .filter(ProductImage.id == image_id, ProductImage.product_id == product_id)
@@ -278,6 +290,7 @@ def admin_update_rating(
     _: dict = Depends(get_current_user_claims),  # Commerce lo llama con el JWT del usuario que reseno
     db: Session = Depends(get_db),
 ):
+    """Actualiza el resumen de rating calculado por Commerce."""
     if payload.product_id != product_id:
         raise HTTPException(422, "product_id en path y body no coinciden.")
     if not db.query(Product).filter(Product.id == product_id).first():
@@ -301,6 +314,7 @@ def admin_update_rating(
 
 @router.get("/store/settings", response_model=StoreSettingPublic)
 def admin_get_settings(_: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    """Obtiene configuracion de tienda para el panel admin."""
     s = db.query(StoreSetting).order_by(StoreSetting.id.asc()).first()
     if not s:
         raise HTTPException(404, "Configuracion no inicializada.")
@@ -313,6 +327,7 @@ def admin_update_settings(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Actualiza branding/contacto de tienda e invalida cache publico."""
     s = db.query(StoreSetting).order_by(StoreSetting.id.asc()).first()
     if not s:
         raise HTTPException(404, "Configuracion no inicializada.")
@@ -331,6 +346,7 @@ def admin_update_settings(
 
 @router.get("/messages", response_model=list[InformativeMessagePublic])
 def admin_list_messages(_: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lista mensajes informativos administrables."""
     return db.query(InformativeMessage).order_by(InformativeMessage.id.desc()).all()
 
 
@@ -341,6 +357,7 @@ def admin_create_message(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Crea un mensaje informativo y refresca cache publico."""
     m = InformativeMessage(**payload.model_dump())
     db.add(m)
     db.commit()
@@ -356,6 +373,7 @@ def admin_update_message(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Actualiza un mensaje informativo y refresca cache publico."""
     m = db.query(InformativeMessage).filter(InformativeMessage.id == message_id).first()
     if not m:
         raise HTTPException(404, "Mensaje no encontrado.")
@@ -373,6 +391,7 @@ def admin_delete_message(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Elimina un mensaje informativo e invalida cache publico."""
     m = db.query(InformativeMessage).filter(InformativeMessage.id == message_id).first()
     if not m:
         raise HTTPException(404, "Mensaje no encontrado.")

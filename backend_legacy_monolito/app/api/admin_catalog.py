@@ -1,3 +1,12 @@
+"""Rutas administrativas del catalogo en el monolito legacy.
+
+Este modulo concentra las operaciones que en la arquitectura de microservicios
+quedaron repartidas entre Catalog Service e Inventory Service. Se conserva
+para documentar el MVP inicial y para mantener disponible la version
+monolitica usada durante la transicion: desde aqui el administrador crea
+categorias, productos, variantes, movimientos de inventario y alertas de bajo
+stock.
+"""
 import os
 import uuid
 
@@ -18,6 +27,7 @@ router = APIRouter(prefix="/admin", tags=["Administracion catalogo"])
 
 
 def serialize_variant(variant: ProductVariant) -> dict:
+    """Normaliza una variante de producto para el panel administrativo."""
     return {
         "id": variant.id,
         "product_id": variant.product_id,
@@ -38,6 +48,7 @@ ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 @router.post("/upload-image")
 async def upload_image(file: UploadFile = File(...), admin: User = Depends(require_admin)):
+    """Valida y persiste imagenes subidas desde el panel de catalogo."""
     if file.content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(status_code=400, detail="Tipo de archivo no permitido. Usa JPG, PNG o WebP.")
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "jpg"
@@ -51,11 +62,13 @@ async def upload_image(file: UploadFile = File(...), admin: User = Depends(requi
 
 @router.get("/categories")
 def admin_categories(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lista categorias con estados de administracion, incluidas archivadas."""
     return [serialize_category(category) for category in db.query(Category).order_by(Category.id.desc()).all()]
 
 
 @router.post("/categories", status_code=status.HTTP_201_CREATED)
 def create_category(payload: CategoryIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Crea una categoria y deja evidencia en auditoria del administrador."""
     category = Category(**payload.model_dump())
     db.add(category)
     db.flush()
@@ -67,6 +80,7 @@ def create_category(payload: CategoryIn, admin: User = Depends(require_admin), d
 
 @router.get("/categories/{category_id}")
 def get_category(category_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Obtiene una categoria puntual para editarla desde el dashboard."""
     category = db.query(Category).filter(Category.id == category_id).first()
     if not category:
         raise HTTPException(status_code=404, detail="Categoria no encontrada.")
@@ -75,6 +89,7 @@ def get_category(category_id: int, admin: User = Depends(require_admin), db: Ses
 
 @router.put("/categories/{category_id}")
 def update_category(category_id: int, payload: CategoryIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Actualiza todos los campos editables de una categoria existente."""
     category = db.query(Category).filter(Category.id == category_id).first()
     if not category:
         raise HTTPException(status_code=404, detail="Categoria no encontrada.")
@@ -89,6 +104,7 @@ def update_category(category_id: int, payload: CategoryIn, admin: User = Depends
 
 @router.delete("/categories/{category_id}", response_model=ApiMessage)
 def archive_category(category_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Aplica borrado logico para ocultar la categoria sin perder historial."""
     category = db.query(Category).filter(Category.id == category_id).first()
     if not category:
         raise HTTPException(status_code=404, detail="Categoria no encontrada.")
@@ -101,12 +117,14 @@ def archive_category(category_id: int, admin: User = Depends(require_admin), db:
 
 @router.get("/products")
 def admin_products(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Carga productos enriquecidos para gestion completa del catalogo."""
     products = db.query(Product).options(joinedload(Product.category), joinedload(Product.variants), joinedload(Product.reviews), joinedload(Product.images)).order_by(Product.id.desc()).all()
     return [serialize_product(product) for product in products]
 
 
 @router.post("/products", status_code=status.HTTP_201_CREATED)
 def create_product(payload: ProductIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Crea un producto validando que su categoria exista."""
     if not db.query(Category).filter(Category.id == payload.category_id).first():
         raise HTTPException(status_code=404, detail="Categoria no encontrada.")
     product = Product(**payload.model_dump())
@@ -119,6 +137,7 @@ def create_product(payload: ProductIn, admin: User = Depends(require_admin), db:
 
 @router.get("/products/{product_id}")
 def admin_product_detail(product_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Devuelve el producto con categoria, variantes, resenas e imagenes."""
     product = db.query(Product).options(joinedload(Product.category), joinedload(Product.variants), joinedload(Product.reviews), joinedload(Product.images)).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado.")
@@ -127,6 +146,7 @@ def admin_product_detail(product_id: int, admin: User = Depends(require_admin), 
 
 @router.put("/products/{product_id}")
 def update_product(product_id: int, payload: ProductIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Actualiza metadatos comerciales del producto y registra auditoria."""
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado.")
@@ -141,6 +161,7 @@ def update_product(product_id: int, payload: ProductIn, admin: User = Depends(re
 
 @router.delete("/products/{product_id}", response_model=ApiMessage)
 def archive_product(product_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Archiva el producto y lo despublica para que no aparezca al cliente."""
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado.")
@@ -153,12 +174,14 @@ def archive_product(product_id: int, admin: User = Depends(require_admin), db: S
 
 @router.get("/products/{product_id}/variants")
 def product_variants(product_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lista las variantes de un producto para gestion de precio y stock."""
     variants = db.query(ProductVariant).filter(ProductVariant.product_id == product_id).order_by(ProductVariant.id.desc()).all()
     return [serialize_variant(variant) for variant in variants]
 
 
 @router.post("/products/{product_id}/variants", status_code=status.HTTP_201_CREATED)
 def create_variant(product_id: int, payload: VariantIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Crea una variante y genera SKU automatico cuando el admin no lo envia."""
     if not db.query(Product).filter(Product.id == product_id).first():
         raise HTTPException(status_code=404, detail="Producto no encontrado.")
     data = payload.model_dump()
@@ -180,6 +203,7 @@ def create_variant(product_id: int, payload: VariantIn, admin: User = Depends(re
 
 @router.put("/products/{product_id}/variants/{variant_id}")
 def update_variant(product_id: int, variant_id: int, payload: VariantIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Actualiza costo, precio, stock y atributos de una variante."""
     variant = db.query(ProductVariant).filter(ProductVariant.id == variant_id, ProductVariant.product_id == product_id).first()
     if not variant:
         raise HTTPException(status_code=404, detail="Variante no encontrada.")
@@ -194,6 +218,7 @@ def update_variant(product_id: int, variant_id: int, payload: VariantIn, admin: 
 
 @router.delete("/products/{product_id}/variants/{variant_id}", response_model=ApiMessage)
 def deactivate_variant(product_id: int, variant_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Desactiva una variante sin eliminar sus referencias historicas."""
     variant = db.query(ProductVariant).filter(ProductVariant.id == variant_id, ProductVariant.product_id == product_id).first()
     if not variant:
         raise HTTPException(status_code=404, detail="Variante no encontrada.")
@@ -205,6 +230,7 @@ def deactivate_variant(product_id: int, variant_id: int, admin: User = Depends(r
 
 @router.post("/inventory/movements", status_code=status.HTTP_201_CREATED)
 def create_inventory_movement(payload: InventoryMovementIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Registra entradas, salidas o ajustes y refleja el cambio en stock."""
     variant = db.query(ProductVariant).filter(ProductVariant.id == payload.variant_id).first()
     if not variant:
         raise HTTPException(status_code=404, detail="Variante no encontrada.")
@@ -235,6 +261,7 @@ def create_inventory_movement(payload: InventoryMovementIn, admin: User = Depend
 
 @router.get("/inventory/alerts")
 def inventory_alerts(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Calcula alertas de bajo stock usando el umbral configurable de tienda."""
     settings = db.query(StoreSetting).order_by(StoreSetting.id.asc()).first()
     threshold = settings.stock_threshold if settings else 5
     variants = (

@@ -10,6 +10,7 @@ Base = declarative_base()
 
 
 def get_db():
+    """Dependency de FastAPI: entrega una sesion commerce_db por request."""
     db = SessionLocal()
     try:
         yield db

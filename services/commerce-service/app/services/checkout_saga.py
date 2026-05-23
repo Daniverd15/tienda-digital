@@ -121,6 +121,7 @@ class CheckoutError(Exception):
 
     def __init__(self, status_code: int, code: str, message: str,
                  extra: dict | None = None):
+        """Construye el payload que el endpoint devuelve al frontend."""
         super().__init__(message)
         self.status_code = status_code
         # El payload incluye un `code` machine-readable para que el frontend

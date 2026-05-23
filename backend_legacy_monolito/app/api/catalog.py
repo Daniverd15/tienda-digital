@@ -1,3 +1,9 @@
+"""Catalogo publico del monolito legacy.
+
+Expone configuracion de tienda, mensajes activos, categorias, productos,
+busqueda y resenas aprobadas. Es la superficie consumida por el frontend
+publico antes de que el dominio de catalogo se separara en Catalog Service.
+"""
 from datetime import date
 from decimal import Decimal
 
@@ -13,10 +19,12 @@ router = APIRouter(tags=["Catalogo"])
 
 
 def money(value: Decimal | int | float | None) -> float:
+    """Serializa valores monetarios a float para evitar Decimals en JSON."""
     return float(value or 0)
 
 
 def serialize_category(category: Category) -> dict:
+    """Normaliza una categoria publica con flags de visibilidad."""
     return {
         "id": category.id,
         "name": category.name,
@@ -27,6 +35,7 @@ def serialize_category(category: Category) -> dict:
 
 
 def serialize_product(product: Product) -> dict:
+    """Construye la vista publica de producto con galeria, stock y resenas."""
     ratings = [review.rating for review in product.reviews if review.approved]
     average_rating = round(sum(ratings) / len(ratings), 2) if ratings else 0
     stock = sum(variant.stock for variant in product.variants if variant.active)
@@ -69,12 +78,14 @@ def serialize_product(product: Product) -> dict:
 
 @router.get("/store/settings")
 def get_store_settings(db: Session = Depends(get_db)):
+    """Devuelve branding y parametros comerciales de la tienda."""
     settings = db.query(StoreSetting).order_by(StoreSetting.id.asc()).first()
     return settings or {}
 
 
 @router.get("/store/messages")
 def get_store_messages(db: Session = Depends(get_db)):
+    """Lista mensajes informativos activos dentro de su ventana de vigencia."""
     today = date.today()
     messages = (
         db.query(InformativeMessage)
@@ -91,6 +102,7 @@ def get_store_messages(db: Session = Depends(get_db)):
 
 @router.get("/categories")
 def get_categories(db: Session = Depends(get_db)):
+    """Expone solo categorias activas y no archivadas para navegacion."""
     categories = (
         db.query(Category)
         .filter(Category.active.is_(True), Category.archived.is_(False))
@@ -102,6 +114,7 @@ def get_categories(db: Session = Depends(get_db)):
 
 @router.get("/products")
 def get_products(db: Session = Depends(get_db)):
+    """Lista productos publicados con datos necesarios para el catalogo."""
     products = (
         db.query(Product)
         .options(joinedload(Product.category), joinedload(Product.variants), joinedload(Product.reviews), joinedload(Product.images))
@@ -127,6 +140,7 @@ def search_products(
     in_stock: bool | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
+    """Aplica filtros de texto, categoria, precio y stock sobre productos."""
     query = (
         db.query(Product)
         .options(joinedload(Product.category), joinedload(Product.variants), joinedload(Product.reviews), joinedload(Product.images))
@@ -155,6 +169,7 @@ def search_products(
 
 @router.get("/products/{product_id}")
 def get_product_detail(product_id: int, db: Session = Depends(get_db)):
+    """Devuelve el detalle completo de un producto publico."""
     product = (
         db.query(Product)
         .options(joinedload(Product.category), joinedload(Product.variants), joinedload(Product.reviews), joinedload(Product.images))
@@ -168,6 +183,7 @@ def get_product_detail(product_id: int, db: Session = Depends(get_db)):
 
 @router.get("/products/{product_id}/reviews")
 def get_product_reviews(product_id: int, db: Session = Depends(get_db)):
+    """Lista resenas aprobadas visibles para un producto."""
     product_exists = db.query(func.count(Product.id)).filter(Product.id == product_id).scalar()
     if not product_exists:
         raise HTTPException(status_code=404, detail="Producto no encontrado.")

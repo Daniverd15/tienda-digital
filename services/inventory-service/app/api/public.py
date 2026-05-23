@@ -62,6 +62,7 @@ def variants_by_ids(ids: str = Query(..., description="ids separados por coma"),
 
 @router.get("/variants/{variant_id}")
 def get_variant(variant_id: int, db: Session = Depends(get_db)):
+    """Devuelve una variante publica por id para pantallas de detalle."""
     v = db.query(ProductVariant).filter(ProductVariant.id == variant_id).first()
     if not v:
         raise HTTPException(404, "Variante no encontrada.")
@@ -97,5 +98,4 @@ def stock_summary(db: Session = Depends(get_db)):
         }
         for pid, stock, count, min_p, max_p in rows
     }
-
 

@@ -117,6 +117,7 @@ def get_payment(
     db: Session = Depends(get_db),
     _: dict = Depends(get_current_user_claims),
 ):
+    """Consulta un pago por id para seguimiento del checkout."""
     p = db.query(Payment).filter(Payment.id == payment_id).first()
     if not p:
         raise HTTPException(404, "Pago no encontrado.")
@@ -129,6 +130,7 @@ def get_by_order(
     db: Session = Depends(get_db),
     _: dict = Depends(get_current_user_claims),
 ):
+    """Lista pagos asociados a una orden logica de Commerce."""
     rows = db.query(Payment).filter(Payment.order_id == order_id).order_by(Payment.id.desc()).all()
     return [PaymentPublic.model_validate(p).model_dump() for p in rows]
 
@@ -139,6 +141,7 @@ def refund(
     db: Session = Depends(get_db),
     _: dict = Depends(require_admin),
 ):
+    """Registra un reembolso administrativo sobre pagos aprobados."""
     p = db.query(Payment).filter(Payment.id == payload.payment_id).first()
     if not p:
         raise HTTPException(404, "Pago no encontrado.")

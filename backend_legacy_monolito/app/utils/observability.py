@@ -1,3 +1,8 @@
+"""Middleware de observabilidad basica para el monolito legacy.
+
+Mide cada request, expone el tiempo en cabecera HTTP y registra eventos de
+request_completed en SystemLog para tener trazabilidad minima en el MVP.
+"""
 import time
 from typing import Callable
 
@@ -9,6 +14,7 @@ from app.services.audit_service import add_system_log
 
 
 async def response_time_middleware(request: Request, call_next: Callable) -> Response:
+    """Agrega X-Response-Time-ms y registra la request salvo health checks."""
     start = time.perf_counter()
     response = await call_next(request)
     duration_ms = round((time.perf_counter() - start) * 1000, 2)
@@ -31,4 +37,3 @@ async def response_time_middleware(request: Request, call_next: Callable) -> Res
         finally:
             db.close()
     return response
-

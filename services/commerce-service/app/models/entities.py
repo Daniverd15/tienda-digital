@@ -27,6 +27,7 @@ from app.core.database import Base
 
 
 class TimestampMixin:
+    """Campos temporales comunes para entidades modificables."""
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -37,6 +38,7 @@ class TimestampMixin:
 
 
 class Cart(Base, TimestampMixin):
+    """Carrito abierto/checkout del usuario dentro de Commerce."""
     __tablename__ = "carts"
 
     id = Column(Integer, primary_key=True)
@@ -47,6 +49,7 @@ class Cart(Base, TimestampMixin):
 
 
 class CartItem(Base):
+    """Linea de carrito con snapshot de producto y variante."""
     __tablename__ = "cart_items"
     __table_args__ = (UniqueConstraint("cart_id", "variant_id", name="uq_cart_variant"),)
 
@@ -69,6 +72,7 @@ class CartItem(Base):
 
 
 class Order(Base, TimestampMixin):
+    """Pedido real creado solo cuando la SAGA termina en PAID."""
     __tablename__ = "orders"
     __table_args__ = (Index("ix_order_user_status", "user_id", "status"),)
 
@@ -103,6 +107,7 @@ class Order(Base, TimestampMixin):
 
 
 class OrderItem(Base):
+    """Snapshot historico de producto, precio y costo dentro del pedido."""
     __tablename__ = "order_items"
 
     id = Column(Integer, primary_key=True)
@@ -121,6 +126,7 @@ class OrderItem(Base):
 
 
 class OrderStatusHistory(Base):
+    """Timeline visible de transiciones logisticas del pedido."""
     __tablename__ = "order_status_history"
 
     id = Column(Integer, primary_key=True)
@@ -208,6 +214,7 @@ class Review(Base):
 
 
 class Notification(Base):
+    """Notificacion in-app para eventos de compra y pedidos."""
     __tablename__ = "notifications"
 
     id = Column(Integer, primary_key=True)
@@ -225,6 +232,7 @@ class Notification(Base):
 
 
 class Employee(Base, TimestampMixin):
+    """Empleado usado para calculos de nomina en finanzas MVP."""
     __tablename__ = "employees"
 
     id = Column(Integer, primary_key=True)
@@ -236,6 +244,7 @@ class Employee(Base, TimestampMixin):
 
 
 class Expense(Base):
+    """Gasto operativo usado para calcular utilidad neta."""
     __tablename__ = "expenses"
 
     id = Column(Integer, primary_key=True)

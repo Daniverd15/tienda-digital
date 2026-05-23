@@ -13,12 +13,14 @@ from app.core.security import (
 
 
 def test_hash_and_verify_roundtrip():
+    """El hash bcrypt valida la clave correcta y rechaza una incorrecta."""
     h = get_password_hash("Pa$$w0rd!")
     assert verify_password("Pa$$w0rd!", h) is True
     assert verify_password("incorrecta", h) is False
 
 
 def test_password_strength_rules():
+    """La politica de contrasena cubre longitud, casos, numero y simbolo."""
     validate_password_strength("Abcdef1!")
     with pytest.raises(ValueError):
         validate_password_strength("corta")
@@ -33,6 +35,7 @@ def test_password_strength_rules():
 
 
 def test_access_token_roundtrip():
+    """El access token conserva claims usados por los microservicios."""
     token = create_access_token(subject="42", role="customer", email="x@y.com")
     payload = decode_token(token)
     assert payload["sub"] == "42"
@@ -41,6 +44,7 @@ def test_access_token_roundtrip():
 
 
 def test_refresh_token_marked_as_refresh():
+    """Los refresh tokens llevan type=refresh para rechazarlos como access."""
     token, _ = create_refresh_token(subject="7")
     payload = decode_token(token)
     assert payload["type"] == "refresh"
@@ -48,4 +52,5 @@ def test_refresh_token_marked_as_refresh():
 
 
 def test_hash_token_is_sha256_hex():
+    """El hash de refresh token se guarda como SHA-256 hexadecimal."""
     assert len(hash_token("abc")) == 64

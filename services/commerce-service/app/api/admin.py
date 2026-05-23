@@ -62,6 +62,7 @@ def admin_list_orders(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Lista pedidos para backoffice con filtros opcionales por estado/usuario."""
     q = db.query(Order).options(joinedload(Order.items), joinedload(Order.history))
     if status_filter:
         q = q.filter(Order.status == status_filter)
@@ -77,6 +78,7 @@ def admin_get_order(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Obtiene un pedido completo para revision administrativa."""
     o = (
         db.query(Order)
         .options(joinedload(Order.items), joinedload(Order.history))
@@ -97,6 +99,7 @@ def admin_update_order_status(
     db: Session = Depends(get_db),
     correlation_id: str = Depends(get_correlation_id),
 ):
+    """Cambia estado logistico aplicando transiciones permitidas y notifica."""
     o = db.query(Order).filter(Order.id == order_id).first()
     if not o:
         raise HTTPException(404, "Pedido no encontrado.")
@@ -138,12 +141,14 @@ def admin_update_order_status(
 
 @router.get("/employees", response_model=list[EmployeePublic])
 def list_employees(_: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lista empleados que alimentan el calculo de nomina."""
     return db.query(Employee).order_by(Employee.id.desc()).all()
 
 
 @router.post("/employees", response_model=EmployeePublic, status_code=status.HTTP_201_CREATED)
 def create_employee(payload: EmployeeUpsert, _: dict = Depends(require_admin),
                     db: Session = Depends(get_db)):
+    """Crea empleado evitando documentos duplicados."""
     if db.query(Employee).filter(Employee.document == payload.document).first():
         raise HTTPException(409, "Documento ya registrado.")
     e = Employee(**payload.model_dump())
@@ -156,6 +161,7 @@ def create_employee(payload: EmployeeUpsert, _: dict = Depends(require_admin),
 @router.put("/employees/{employee_id}", response_model=EmployeePublic)
 def update_employee(employee_id: int, payload: EmployeeUpsert,
                     _: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    """Actualiza datos laborales y salariales de un empleado."""
     e = db.query(Employee).filter(Employee.id == employee_id).first()
     if not e:
         raise HTTPException(404, "Empleado no encontrado.")
@@ -169,6 +175,7 @@ def update_employee(employee_id: int, payload: EmployeeUpsert,
 @router.delete("/employees/{employee_id}", response_model=ApiMessage)
 def archive_employee(employee_id: int, _: dict = Depends(require_admin),
                      db: Session = Depends(get_db)):
+    """Inactiva un empleado para que deje de sumar en nomina."""
     e = db.query(Employee).filter(Employee.id == employee_id).first()
     if not e:
         raise HTTPException(404, "Empleado no encontrado.")
@@ -184,12 +191,14 @@ def archive_employee(employee_id: int, _: dict = Depends(require_admin),
 
 @router.get("/expenses", response_model=list[ExpensePublic])
 def list_expenses(_: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lista gastos operativos recientes para el panel financiero."""
     return db.query(Expense).order_by(Expense.expense_date.desc()).limit(500).all()
 
 
 @router.post("/expenses", response_model=ExpensePublic, status_code=status.HTTP_201_CREATED)
 def create_expense(payload: ExpenseUpsert, admin_id: int = Depends(current_user_id),
                    _: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    """Registra un gasto operativo asociado al admin creador."""
     e = Expense(**payload.model_dump(), created_by=admin_id)
     db.add(e)
     db.commit()
@@ -200,6 +209,7 @@ def create_expense(payload: ExpenseUpsert, admin_id: int = Depends(current_user_
 @router.delete("/expenses/{expense_id}", response_model=ApiMessage)
 def delete_expense(expense_id: int, _: dict = Depends(require_admin),
                    db: Session = Depends(get_db)):
+    """Elimina un gasto cargado por error."""
     e = db.query(Expense).filter(Expense.id == expense_id).first()
     if not e:
         raise HTTPException(404, "Gasto no encontrado.")
@@ -327,6 +337,7 @@ def admin_list_reviews(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Lista resenas para moderacion administrativa."""
     q = db.query(Review)
     if only_pending:
         q = q.filter(Review.approved.is_(False))
@@ -357,6 +368,7 @@ def approve_review(
     token: str = Depends(get_current_user_token),
     correlation_id: str = Depends(get_correlation_id),
 ):
+    """Aprueba una resena pendiente y actualiza el rating en Catalog."""
     r = db.query(Review).filter(Review.id == review_id).first()
     if not r:
         raise HTTPException(404, "Resena no encontrada.")
@@ -377,6 +389,7 @@ def delete_review(
     token: str = Depends(get_current_user_token),
     correlation_id: str = Depends(get_correlation_id),
 ):
+    """Elimina una resena y recalcula rating si estaba publicada."""
     r = db.query(Review).filter(Review.id == review_id).first()
     if not r:
         raise HTTPException(404, "Resena no encontrada.")
@@ -402,6 +415,7 @@ def list_audit_logs(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Lista eventos de auditoria de pedidos con filtro opcional."""
     q = db.query(OrderAuditLog)
     if order_id:
         q = q.filter(OrderAuditLog.order_id == order_id)

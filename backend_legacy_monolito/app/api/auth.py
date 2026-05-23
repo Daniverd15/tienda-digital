@@ -1,3 +1,10 @@
+"""Autenticacion del monolito legacy.
+
+Implementa registro, login, logout, perfil propio y edicion del perfil admin
+para el MVP inicial. En la version de microservicios esta responsabilidad se
+movio al Auth Service con refresh tokens y bitacora de accesos; aqui se deja
+documentado el flujo compacto basado en un unico access token JWT.
+"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -14,6 +21,7 @@ router = APIRouter(tags=["Autenticacion"])
 
 @router.post("/auth/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: UserCreate, db: Session = Depends(get_db)):
+    """Crea un cliente, valida contrasena fuerte y devuelve su access token."""
     existing = db.query(User).filter(User.email == payload.email.lower()).first()
     if existing:
         raise HTTPException(status_code=409, detail="El correo ya esta registrado.")
@@ -40,6 +48,7 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/auth/login", response_model=TokenResponse)
 def login(payload: UserLogin, db: Session = Depends(get_db)):
+    """Autentica credenciales activas y emite un JWT con id y rol."""
     user = db.query(User).filter(User.email == payload.email.lower(), User.active.is_(True)).first()
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales invalidas.")
@@ -51,6 +60,7 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
 
 @router.post("/auth/logout", response_model=ApiMessage)
 def logout(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Registra el cierre de sesion; el cliente descarta el token localmente."""
     add_audit_log(db, user_id=current_user.id, action="logout", entity="users", entity_id=current_user.id)
     db.commit()
     return ApiMessage(message="Sesion cerrada en el cliente.")
@@ -58,6 +68,7 @@ def logout(current_user: User = Depends(get_current_user), db: Session = Depends
 
 @router.get("/auth/me", response_model=UserPublic)
 def me(current_user: User = Depends(get_current_user)):
+    """Devuelve el usuario asociado al JWT recibido en Authorization."""
     return current_user
 
 
@@ -67,6 +78,7 @@ def update_admin_profile(
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Permite al administrador actualizar sus datos basicos de perfil."""
     previous = {"name": current_user.name, "phone": current_user.phone, "active": current_user.active}
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(current_user, field, value)
@@ -82,4 +94,3 @@ def update_admin_profile(
     db.commit()
     db.refresh(current_user)
     return current_user
-

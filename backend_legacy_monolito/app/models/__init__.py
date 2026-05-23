@@ -1,3 +1,4 @@
+"""Exporta entidades ORM del monolito legacy."""
 from app.models.entities import (
     AuditLog,
     Cart,
@@ -41,4 +42,3 @@ __all__ = [
     "SystemLog",
     "User",
 ]
-

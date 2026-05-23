@@ -23,6 +23,7 @@ router = APIRouter(prefix="/admin", tags=["Administracion"])
 
 @router.get("/me", response_model=UserPublic)
 def admin_me(current_admin: User = Depends(require_admin)):
+    """Devuelve el perfil del administrador autenticado."""
     return current_admin
 
 
@@ -32,6 +33,7 @@ def update_admin_me(
     current_admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Actualiza perfil admin y opcionalmente rota su contrasena."""
     data = payload.model_dump(exclude_unset=True)
     new_password = data.pop("new_password", None)
     for field, value in data.items():
@@ -54,6 +56,7 @@ def list_customers(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Lista clientes para soporte administrativo y consultas de Commerce."""
     query = db.query(User).filter(User.role == "customer")
     if only_active:
         query = query.filter(User.active.is_(True))
@@ -69,6 +72,7 @@ def get_customer(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Obtiene un cliente puntual por id para enriquecer vistas admin."""
     user = db.query(User).filter(User.id == customer_id, User.role == "customer").first()
     if not user:
         raise HTTPException(404, "Cliente no encontrado.")
@@ -81,4 +85,5 @@ def access_logs(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Devuelve eventos recientes de acceso para auditoria."""
     return db.query(AccessLog).order_by(AccessLog.id.desc()).limit(limit).all()

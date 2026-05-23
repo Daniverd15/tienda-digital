@@ -5,10 +5,12 @@ from app.models import ProductVariant, StockMovement
 
 
 def money(v: Decimal | int | float | None) -> float:
+    """Convierte valores monetarios Decimal a float para JSON."""
     return float(v or 0)
 
 
 def serialize_variant_public(v: ProductVariant) -> dict:
+    """Serializa una variante sin exponer costo ni stock interno."""
     return {
         "id": v.id,
         "product_id": v.product_id,
@@ -24,6 +26,7 @@ def serialize_variant_public(v: ProductVariant) -> dict:
 
 
 def serialize_variant_internal(v: ProductVariant) -> dict:
+    """Serializa una variante completa para administracion e integraciones."""
     return {
         "id": v.id,
         "product_id": v.product_id,
@@ -44,6 +47,7 @@ def serialize_variant_internal(v: ProductVariant) -> dict:
 
 
 def serialize_movement(m: StockMovement) -> dict:
+    """Serializa movimientos de stock para auditoria de inventario."""
     return {
         "id": m.id,
         "variant_id": m.variant_id,

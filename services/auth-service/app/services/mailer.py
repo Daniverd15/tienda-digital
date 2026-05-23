@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def send_email(to: str, subject: str, body: str) -> bool:
+    """Envia un correo simple por SMTP y falla de forma no bloqueante."""
     msg = EmailMessage()
     msg["From"] = settings.smtp_from
     msg["To"] = to
@@ -30,6 +31,7 @@ def send_email(to: str, subject: str, body: str) -> bool:
 
 
 def send_welcome_email(name: str, email: str) -> bool:
+    """Construye y envia el correo de bienvenida del registro."""
     body = (
         f"Hola {name},\n\n"
         "Tu cuenta en Tienda Digital fue creada con exito.\n"

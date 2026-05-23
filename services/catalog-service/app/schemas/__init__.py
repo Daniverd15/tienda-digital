@@ -1,3 +1,4 @@
+"""Contratos Pydantic de Catalog Service."""
 from app.schemas.catalog import (
     ApiMessage,
     CategoryAdminUpsert,

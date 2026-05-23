@@ -1,3 +1,11 @@
+"""Rutas administrativas para finanzas, clientes y reportes del monolito.
+
+Agrupa el tablero financiero del MVP inicial: ventas aprobadas, costo de
+mercancia (COGS), nomina, gastos operativos, clientes, empleados y exportes.
+En la version microservicios esta responsabilidad vive principalmente en
+Commerce Service, pero este archivo sigue siendo referencia funcional de las
+reglas contables implementadas en la primera entrega.
+"""
 import csv
 from io import StringIO
 from decimal import Decimal
@@ -18,10 +26,18 @@ router = APIRouter(prefix="/admin", tags=["Administracion financiera"])
 
 
 def money(value) -> float:
+    """Convierte Decimals/None a float para respuestas JSON del frontend."""
     return float(value or 0)
 
 
 def finance_summary(db: Session) -> dict:
+    """Calcula KPIs financieros agregados a partir de pedidos aprobados.
+
+    Solo considera ordenes con pago aprobado para no inflar ingresos con
+    pedidos pendientes o rechazados. A partir de esas ordenes estima COGS
+    usando el costo de cada variante, descuenta nomina y gastos operativos,
+    y devuelve datos listos para el dashboard.
+    """
     approved_orders = (
         db.query(Order)
         .options(joinedload(Order.items).joinedload(OrderItem.variant))
@@ -56,6 +72,7 @@ def finance_summary(db: Session) -> dict:
 
 
 def serialize_employee(employee: Employee) -> dict:
+    """Normaliza empleados para las tablas de administracion."""
     return {
         "id": employee.id,
         "name": employee.name,
@@ -67,6 +84,7 @@ def serialize_employee(employee: Employee) -> dict:
 
 
 def serialize_expense(expense: Expense) -> dict:
+    """Normaliza gastos operativos para listados, edicion y reportes."""
     return {
         "id": expense.id,
         "expense_type": expense.expense_type,
@@ -81,12 +99,14 @@ def serialize_expense(expense: Expense) -> dict:
 
 @router.get("/customers")
 def customers(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lista clientes registrados para gestion comercial y soporte."""
     users = db.query(User).filter(User.role == "customer").order_by(User.created_at.desc()).all()
     return [{"id": user.id, "name": user.name, "email": user.email, "phone": user.phone, "active": user.active} for user in users]
 
 
 @router.patch("/customers/{customer_id}/status")
 def update_customer_status(customer_id: int, active: bool, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Activa o desactiva un cliente sin borrar su historial de compras."""
     customer = db.query(User).filter(User.id == customer_id, User.role == "customer").first()
     if not customer:
         raise HTTPException(status_code=404, detail="Cliente no encontrado.")
@@ -99,17 +119,20 @@ def update_customer_status(customer_id: int, active: bool, admin: User = Depends
 
 @router.get("/customers/{customer_id}/orders")
 def customer_orders(customer_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Consulta pedidos de un cliente para revision administrativa."""
     orders = db.query(Order).options(joinedload(Order.items), joinedload(Order.payments)).filter(Order.user_id == customer_id).all()
     return [serialize_order(order) for order in orders]
 
 
 @router.get("/employees")
 def employees(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lista empleados usados para calcular el rubro de nomina."""
     return [serialize_employee(employee) for employee in db.query(Employee).order_by(Employee.id.desc()).all()]
 
 
 @router.post("/employees", status_code=status.HTTP_201_CREATED)
 def create_employee(payload: EmployeeIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Crea un empleado y lo incorpora al calculo de nomina si esta activo."""
     employee = Employee(**payload.model_dump())
     db.add(employee)
     db.flush()
@@ -121,6 +144,7 @@ def create_employee(payload: EmployeeIn, admin: User = Depends(require_admin), d
 
 @router.put("/employees/{employee_id}")
 def update_employee(employee_id: int, payload: EmployeeIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Actualiza datos laborales y salariales de un empleado."""
     employee = db.query(Employee).filter(Employee.id == employee_id).first()
     if not employee:
         raise HTTPException(status_code=404, detail="Empleado no encontrado.")
@@ -134,6 +158,7 @@ def update_employee(employee_id: int, payload: EmployeeIn, admin: User = Depends
 
 @router.delete("/employees/{employee_id}", response_model=ApiMessage)
 def delete_employee(employee_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Inactiva un empleado para excluirlo de la nomina futura."""
     employee = db.query(Employee).filter(Employee.id == employee_id).first()
     if not employee:
         raise HTTPException(status_code=404, detail="Empleado no encontrado.")
@@ -145,11 +170,13 @@ def delete_employee(employee_id: int, admin: User = Depends(require_admin), db: 
 
 @router.get("/expenses")
 def expenses(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lista gastos operativos ordenados por fecha de ocurrencia."""
     return [serialize_expense(expense) for expense in db.query(Expense).order_by(Expense.expense_date.desc()).all()]
 
 
 @router.post("/expenses", status_code=status.HTTP_201_CREATED)
 def create_expense(payload: ExpenseIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Registra un gasto operativo asociado al administrador creador."""
     expense = Expense(**payload.model_dump(), created_by=admin.id)
     db.add(expense)
     db.flush()
@@ -161,6 +188,7 @@ def create_expense(payload: ExpenseIn, admin: User = Depends(require_admin), db:
 
 @router.put("/expenses/{expense_id}")
 def update_expense(expense_id: int, payload: ExpenseIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Edita un gasto y conserva valores previos en auditoria."""
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
         raise HTTPException(status_code=404, detail="Gasto no encontrado.")
@@ -174,6 +202,7 @@ def update_expense(expense_id: int, payload: ExpenseIn, admin: User = Depends(re
 
 @router.delete("/expenses/{expense_id}", response_model=ApiMessage)
 def delete_expense(expense_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Elimina un gasto cargado por error y audita la accion."""
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
         raise HTTPException(status_code=404, detail="Gasto no encontrado.")
@@ -185,11 +214,13 @@ def delete_expense(expense_id: int, admin: User = Depends(require_admin), db: Se
 
 @router.get("/finance/summary")
 def finance(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Expone el resumen financiero crudo para componentes del admin."""
     return finance_summary(db)
 
 
 @router.get("/dashboard")
 def dashboard(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Compone KPIs y conteos por estado para la pantalla principal admin."""
     summary = finance_summary(db)
     return {
         **summary,
@@ -203,6 +234,7 @@ def dashboard(admin: User = Depends(require_admin), db: Session = Depends(get_db
 
 @router.get("/reports/export/csv")
 def export_csv(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Genera un CSV liviano con los indicadores financieros actuales."""
     summary = finance_summary(db)
     output = StringIO()
     writer = csv.writer(output)
@@ -220,6 +252,7 @@ def export_csv(admin: User = Depends(require_admin), db: Session = Depends(get_d
 
 @router.get("/reports/export/pdf")
 def export_pdf(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Devuelve HTML imprimible para exportar el reporte financiero a PDF."""
     summary = finance_summary(db)
     top = "".join(
         f"<tr><td style='padding:8px 12px;border-bottom:1px solid #e5e7eb'><strong>#{i+1}</strong> {p['product_name']}</td>"

@@ -73,6 +73,7 @@ CACHE_TTL_PRODUCT_DETAIL = 60
 
 @router.get("/store/settings")
 def store_settings(db: Session = Depends(get_db)):
+    """Devuelve branding y parametros comerciales con cache de lectura."""
     cached = cache.get("catalog:store:settings")
     if cached is not None:
         return cached
@@ -97,6 +98,7 @@ def store_settings(db: Session = Depends(get_db)):
 
 @router.get("/store/messages")
 def store_messages(db: Session = Depends(get_db)):
+    """Lista mensajes activos para la fecha actual usando cache por dia."""
     today = date.today().isoformat()
     cache_key = f"catalog:store:messages:{today}"
     cached = cache.get(cache_key)
@@ -136,6 +138,7 @@ def store_messages(db: Session = Depends(get_db)):
 
 @router.get("/categories")
 def list_categories(db: Session = Depends(get_db)):
+    """Lista categorias navegables activas y no archivadas."""
     cached = cache.get("catalog:categories")
     if cached is not None:
         return cached

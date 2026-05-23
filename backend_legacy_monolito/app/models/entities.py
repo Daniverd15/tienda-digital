@@ -1,3 +1,10 @@
+"""Modelo relacional del monolito legacy.
+
+Aqui vive el esquema ORM completo del MVP inicial: usuarios, catalogo,
+variantes, inventario, carrito, pedidos, pagos, notificaciones, resenas,
+finanzas y auditoria. En la arquitectura final estas entidades se dividen por
+database-per-service, pero el archivo sirve como mapa historico del dominio.
+"""
 from sqlalchemy import (
     Boolean,
     Column,
@@ -17,11 +24,13 @@ from app.core.database import Base
 
 
 class TimestampMixin:
+    """Campos temporales reutilizados por entidades auditables."""
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class User(Base, TimestampMixin):
+    """Cuenta de cliente o administrador que autentica acciones del sistema."""
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -37,6 +46,7 @@ class User(Base, TimestampMixin):
 
 
 class StoreSetting(Base, TimestampMixin):
+    """Configuracion comercial y visual visible en la tienda."""
     __tablename__ = "store_settings"
 
     id = Column(Integer, primary_key=True)
@@ -52,6 +62,7 @@ class StoreSetting(Base, TimestampMixin):
 
 
 class InformativeMessage(Base):
+    """Mensajes promocionales o informativos con ventana de publicacion."""
     __tablename__ = "informative_messages"
 
     id = Column(Integer, primary_key=True)
@@ -64,6 +75,7 @@ class InformativeMessage(Base):
 
 
 class Category(Base, TimestampMixin):
+    """Agrupador publico/administrativo de productos."""
     __tablename__ = "categories"
 
     id = Column(Integer, primary_key=True)
@@ -76,6 +88,7 @@ class Category(Base, TimestampMixin):
 
 
 class Product(Base, TimestampMixin):
+    """Producto vendible con galeria, variantes y resenas asociadas."""
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True)
@@ -95,6 +108,7 @@ class Product(Base, TimestampMixin):
 
 
 class ProductImage(Base):
+    """Imagen adicional de la galeria de un producto."""
     __tablename__ = "product_images"
 
     id = Column(Integer, primary_key=True)
@@ -106,6 +120,7 @@ class ProductImage(Base):
 
 
 class ProductVariant(Base, TimestampMixin):
+    """Presentacion concreta de producto con SKU, precio, costo y stock."""
     __tablename__ = "product_variants"
     __table_args__ = (UniqueConstraint("sku", name="uq_product_variant_sku"),)
 
@@ -125,6 +140,7 @@ class ProductVariant(Base, TimestampMixin):
 
 
 class InventoryMovement(Base):
+    """Bitacora de entradas, salidas y ajustes de inventario."""
     __tablename__ = "inventory_movements"
 
     id = Column(Integer, primary_key=True)
@@ -140,6 +156,7 @@ class InventoryMovement(Base):
 
 
 class Cart(Base, TimestampMixin):
+    """Carrito abierto o finalizado de un usuario."""
     __tablename__ = "carts"
 
     id = Column(Integer, primary_key=True)
@@ -151,6 +168,7 @@ class Cart(Base, TimestampMixin):
 
 
 class CartItem(Base):
+    """Linea de carrito que referencia una variante y congela precio unitario."""
     __tablename__ = "cart_items"
     __table_args__ = (UniqueConstraint("cart_id", "variant_id", name="uq_cart_variant"),)
 
@@ -165,6 +183,7 @@ class CartItem(Base):
 
 
 class Order(Base, TimestampMixin):
+    """Pedido creado desde un carrito con datos de pago y entrega."""
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True)
@@ -189,6 +208,7 @@ class Order(Base, TimestampMixin):
 
 
 class OrderItem(Base):
+    """Snapshot de producto/variante dentro de un pedido historico."""
     __tablename__ = "order_items"
 
     id = Column(Integer, primary_key=True)
@@ -205,6 +225,7 @@ class OrderItem(Base):
 
 
 class Payment(Base):
+    """Resultado de la pasarela simulada asociado a un pedido."""
     __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True)
@@ -220,6 +241,7 @@ class Payment(Base):
 
 
 class Notification(Base):
+    """Mensaje in-app que informa eventos relevantes al cliente."""
     __tablename__ = "notifications"
 
     id = Column(Integer, primary_key=True)
@@ -235,6 +257,7 @@ class Notification(Base):
 
 
 class Review(Base):
+    """Resena de producto ligada a una compra entregada."""
     __tablename__ = "reviews"
     __table_args__ = (UniqueConstraint("user_id", "product_id", "order_id", name="uq_review_order_product"),)
 
@@ -253,6 +276,7 @@ class Review(Base):
 
 
 class Employee(Base, TimestampMixin):
+    """Empleado usado para registrar nomina en el dashboard financiero."""
     __tablename__ = "employees"
 
     id = Column(Integer, primary_key=True)
@@ -264,6 +288,7 @@ class Employee(Base, TimestampMixin):
 
 
 class Expense(Base):
+    """Gasto operativo que afecta la utilidad neta del reporte."""
     __tablename__ = "expenses"
 
     id = Column(Integer, primary_key=True)
@@ -279,6 +304,7 @@ class Expense(Base):
 
 
 class AuditLog(Base):
+    """Registro de cambios administrativos o acciones sensibles."""
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True)
@@ -294,6 +320,7 @@ class AuditLog(Base):
 
 
 class SystemLog(Base):
+    """Evento tecnico del sistema para soporte u observabilidad basica."""
     __tablename__ = "system_logs"
 
     id = Column(Integer, primary_key=True)

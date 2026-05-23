@@ -1,3 +1,4 @@
+"""Utilidad manual para una prueba simple de concurrencia local."""
 import argparse
 import concurrent.futures
 import time
@@ -5,6 +6,7 @@ from urllib.request import urlopen
 
 
 def hit(url: str) -> float:
+    """Ejecuta una request GET y devuelve su duracion en milisegundos."""
     start = time.perf_counter()
     with urlopen(url, timeout=10) as response:
         response.read()
@@ -14,6 +16,7 @@ def hit(url: str) -> float:
 
 
 def main() -> None:
+    """Lanza varias requests concurrentes contra una URL del backend."""
     parser = argparse.ArgumentParser(description="Prueba simple de concurrencia local.")
     parser.add_argument("--url", default="http://localhost:8000/products")
     parser.add_argument("--requests", type=int, default=20)
@@ -26,4 +29,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

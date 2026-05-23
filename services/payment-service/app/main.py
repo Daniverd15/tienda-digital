@@ -27,6 +27,7 @@ logger = logging.getLogger("payment-service")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Inicializa tablas y worker periodico de reconciliacion."""
     logger.info("Inicializando %s ...", settings.service_name)
     Base.metadata.create_all(bind=engine)
     # Worker async: cada 5 min reconcilia PENDING/FAILED
@@ -62,11 +63,13 @@ app.add_middleware(
 
 @app.get("/", tags=["meta"])
 def root() -> dict:
+    """Metadata liviana para discovery y pruebas manuales."""
     return {"service": settings.service_name, "version": app.version, "status": "ready"}
 
 
 @app.get("/health", tags=["meta"])
 def health() -> dict:
+    """Healthcheck profundo: valida MySQL."""
     db_ok = False
     try:
         db = SessionLocal()

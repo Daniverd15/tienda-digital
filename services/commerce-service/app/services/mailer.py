@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def send_email(to: str, subject: str, body: str) -> bool:
+    """Envia correo transaccional sin bloquear la operacion principal."""
     if not to:
         return False
     msg = EmailMessage()

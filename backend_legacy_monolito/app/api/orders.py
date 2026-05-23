@@ -1,3 +1,10 @@
+"""Checkout, pedidos, pagos simulados y notificaciones del monolito legacy.
+
+Este archivo representa el flujo previo a la SAGA de microservicios: calcula
+totales, simula pagos, crea pedidos, descuenta stock directamente y permite
+seguimiento por cliente/admin. Se mantiene documentado porque ayuda a comparar
+el MVP monolitico con el diseno actual Commerce + Inventory + Payment.
+"""
 from datetime import datetime
 from decimal import Decimal
 from random import randint
@@ -27,6 +34,7 @@ router = APIRouter(tags=["Checkout y pedidos"])
 
 
 def calculate_cart_totals(cart, discount: Decimal = Decimal("0"), additional_costs: Decimal = Decimal("0")) -> dict:
+    """Calcula subtotal, descuentos, costos adicionales y total no negativo."""
     subtotal = sum(Decimal(item.unit_price) * item.quantity for item in cart.items)
     discount = max(Decimal(discount or 0), Decimal("0"))
     additional_costs = max(Decimal(additional_costs or 0), Decimal("0"))
@@ -42,6 +50,7 @@ def calculate_cart_totals(cart, discount: Decimal = Decimal("0"), additional_cos
 
 
 def serialize_order(order: Order) -> dict:
+    """Normaliza un pedido con items y pagos para cliente o administrador."""
     return {
         "id": order.id,
         "order_code": order.order_code,
@@ -88,6 +97,7 @@ def serialize_order(order: Order) -> dict:
 
 @router.post("/checkout")
 def checkout(payload: CheckoutIn, current_user: User = Depends(require_customer), db: Session = Depends(get_db)):
+    """Precalcula la compra y valida stock antes de simular el pago."""
     cart = get_open_cart(db, current_user.id)
     if not cart.items:
         raise HTTPException(status_code=409, detail="El carrito esta vacio.")
@@ -119,6 +129,7 @@ def checkout(payload: CheckoutIn, current_user: User = Depends(require_customer)
 
 @router.post("/payments/simulate")
 def simulate_payment(payload: PaymentSimulateIn):
+    """Genera una respuesta de pasarela simulada para el MVP monolitico."""
     status = payload.requested_status
     messages = {
         "aprobado": "Pago aprobado por pasarela simulada.",
@@ -136,6 +147,7 @@ def simulate_payment(payload: PaymentSimulateIn):
 
 @router.post("/orders", status_code=201)
 def create_order(payload: OrderCreate, current_user: User = Depends(require_customer), db: Session = Depends(get_db)):
+    """Crea el pedido final, descuenta stock si el pago fue aprobado y audita."""
     get_open_cart(db, current_user.id)
     cart = (
         db.query(Cart)
@@ -244,6 +256,7 @@ def create_order(payload: OrderCreate, current_user: User = Depends(require_cust
 
 @router.get("/orders/my")
 def my_orders(current_user: User = Depends(require_customer), db: Session = Depends(get_db)):
+    """Lista pedidos del cliente autenticado en orden cronologico descendente."""
     orders = (
         db.query(Order)
         .options(joinedload(Order.items), joinedload(Order.payments))
@@ -256,6 +269,7 @@ def my_orders(current_user: User = Depends(require_customer), db: Session = Depe
 
 @router.get("/orders/{order_id}")
 def order_detail(order_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Devuelve un pedido si pertenece al cliente o si lo consulta un admin."""
     order = (
         db.query(Order)
         .options(joinedload(Order.items), joinedload(Order.payments))
@@ -271,6 +285,7 @@ def order_detail(order_id: int, current_user: User = Depends(get_current_user), 
 
 @router.get("/notifications")
 def my_notifications(current_user: User = Depends(require_customer), db: Session = Depends(get_db)):
+    """Lista notificaciones in-app del cliente."""
     notifications = (
         db.query(Notification)
         .filter(Notification.user_id == current_user.id)
@@ -296,6 +311,7 @@ def mark_notification_read(
     current_user: User = Depends(require_customer),
     db: Session = Depends(get_db),
 ):
+    """Marca como leida una notificacion del usuario autenticado."""
     notification = (
         db.query(Notification)
         .filter(Notification.id == notification_id, Notification.user_id == current_user.id)
@@ -310,6 +326,7 @@ def mark_notification_read(
 
 @router.get("/admin/orders")
 def admin_orders(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Permite al administrador revisar todos los pedidos del sistema."""
     orders = (
         db.query(Order)
         .options(joinedload(Order.items), joinedload(Order.payments))
@@ -326,6 +343,7 @@ def update_order_status(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Actualiza el estado logistico validando reglas basicas de pago."""
     valid_statuses = {"pendiente_pago", "preparacion", "enviado", "entregado", "cancelado", "rechazado"}
     if payload.status not in valid_statuses:
         raise HTTPException(status_code=422, detail="Estado de pedido no valido.")

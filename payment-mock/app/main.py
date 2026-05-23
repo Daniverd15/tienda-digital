@@ -18,6 +18,7 @@ app = FastAPI(title="Tienda Digital - Pasarela mock", version="0.1.0")
 
 
 class ChargeRequest(BaseModel):
+    """Contrato de cobro que Payment Service envia a la pasarela mock."""
     order_code: str
     amount: float
     currency: str = "COP"
@@ -25,6 +26,7 @@ class ChargeRequest(BaseModel):
 
 
 class ChargeResponse(BaseModel):
+    """Respuesta simulada de la pasarela externa."""
     transaction_reference: str
     status: str  # APPROVED, REJECTED, PENDING
     message: str
@@ -32,11 +34,13 @@ class ChargeResponse(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
+    """Healthcheck simple para docker-compose y pruebas de conectividad."""
     return {"status": "ok", "service": "payment-mock"}
 
 
 @app.post("/charge", response_model=ChargeResponse)
 def charge(req: ChargeRequest) -> ChargeResponse:
+    """Simula un cobro deterministico segun los centavos del monto."""
     cents = int(round(req.amount * 100)) % 100
     if cents == 77:
         return ChargeResponse(

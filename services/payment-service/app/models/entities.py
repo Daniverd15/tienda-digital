@@ -6,6 +6,7 @@ from app.core.database import Base
 
 
 class Payment(Base):
+    """Cobro registrado contra la pasarela mock para una orden de Commerce."""
     __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True)
@@ -26,6 +27,7 @@ class Payment(Base):
 
 
 class PaymentAttempt(Base):
+    """Intento individual de cobro, incluyendo reintentos/reconciliacion."""
     __tablename__ = "payment_attempts"
 
     id = Column(Integer, primary_key=True)
@@ -39,6 +41,7 @@ class PaymentAttempt(Base):
 
 
 class Refund(Base):
+    """Reembolso administrativo asociado a un pago aprobado."""
     __tablename__ = "refunds"
 
     id = Column(Integer, primary_key=True)

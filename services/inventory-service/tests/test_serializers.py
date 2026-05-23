@@ -6,6 +6,7 @@ from app.services.serializers import money, serialize_variant_public, serialize_
 
 
 def _v(**ov):
+    """Construye una variante falsa con defaults editables por prueba."""
     base = dict(
         id=1, product_id=10, sku="SKU-1", color="negro", size="M",
         custom_attribute=None, cost=20000, price=49000, stock=10,
@@ -18,11 +19,13 @@ def _v(**ov):
 
 
 def test_money_handles_none():
+    """money convierte None y numeros a float consistente."""
     assert money(None) == 0.0
     assert money(123) == 123.0
 
 
 def test_variant_public_no_revela_cost_ni_stock():
+    """La vista publica oculta costo, stock total y reservado."""
     out = serialize_variant_public(_v())
     assert out["available"] == 8
     assert "cost" not in out
@@ -31,6 +34,7 @@ def test_variant_public_no_revela_cost_ni_stock():
 
 
 def test_variant_internal_revela_todo():
+    """La vista interna conserva campos sensibles para administracion."""
     out = serialize_variant_internal(_v())
     assert out["cost"] == 20000.0
     assert out["stock"] == 10

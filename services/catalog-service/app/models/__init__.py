@@ -1,3 +1,4 @@
+"""Entidades ORM de Catalog Service."""
 from app.models.entities import (
     Category,
     InformativeMessage,

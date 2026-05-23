@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserCreate(BaseModel):
+    """Payload de registro de cliente."""
     name: str = Field(min_length=2, max_length=120)
     email: EmailStr
     phone: str | None = Field(default=None, max_length=40)
@@ -17,6 +18,7 @@ class UserCreate(BaseModel):
 
 
 class UserLogin(BaseModel):
+    """Credenciales de inicio de sesion."""
     email: EmailStr
     password: str
 
@@ -37,6 +39,7 @@ class AdminProfileUpdate(BaseModel):
 
 
 class RefreshRequest(BaseModel):
+    """Refresh token que se rota para emitir un nuevo par de tokens."""
     refresh_token: str
 
 
@@ -46,6 +49,7 @@ class RefreshRequest(BaseModel):
 
 
 class UserPublic(BaseModel):
+    """Vista publica segura de un usuario autenticado."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -71,6 +75,7 @@ class CustomerPublic(BaseModel):
 
 
 class TokenResponse(BaseModel):
+    """Par de tokens y usuario devueltos por register/login/refresh."""
     access_token: str
     refresh_token: str
     token_type: str = "Bearer"
@@ -79,6 +84,7 @@ class TokenResponse(BaseModel):
 
 
 class AccessLogPublic(BaseModel):
+    """Evento de acceso visible para auditoria administrativa."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -90,4 +96,5 @@ class AccessLogPublic(BaseModel):
 
 
 class ApiMessage(BaseModel):
+    """Respuesta generica de confirmacion."""
     message: str

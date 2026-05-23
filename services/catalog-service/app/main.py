@@ -126,6 +126,7 @@ def ensure_seed() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Inicializa tablas, seed de catalogo y archivos estaticos de uploads."""
     logger.info("Inicializando %s ...", settings.service_name)
     Base.metadata.create_all(bind=engine)
     ensure_seed()
@@ -154,11 +155,13 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 @app.get("/", tags=["meta"])
 def root() -> dict:
+    """Metadata liviana para discovery y pruebas manuales."""
     return {"service": settings.service_name, "version": app.version, "status": "ready"}
 
 
 @app.get("/health", tags=["meta"])
 def health() -> dict:
+    """Healthcheck profundo: valida MySQL y Redis cache."""
     db_ok = False
     redis_ok = False
     try:

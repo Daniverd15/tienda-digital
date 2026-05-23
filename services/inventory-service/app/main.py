@@ -108,6 +108,7 @@ def soft_migrate() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Inicializa BD, seed, migraciones y scheduler de reservas vencidas."""
     logger.info("Inicializando %s ...", settings.service_name)
     Base.metadata.create_all(bind=engine)
     soft_migrate()
@@ -143,11 +144,13 @@ app.add_middleware(
 
 @app.get("/", tags=["meta"])
 def root() -> dict:
+    """Metadata liviana para discovery y pruebas manuales."""
     return {"service": settings.service_name, "version": app.version, "status": "ready"}
 
 
 @app.get("/health", tags=["meta"])
 def health() -> dict:
+    """Healthcheck profundo: valida MySQL y Redis lock."""
     db_ok = False
     redis_ok = False
     try:

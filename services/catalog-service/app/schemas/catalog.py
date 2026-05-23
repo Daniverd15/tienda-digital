@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class CategoryPublic(BaseModel):
+    """Categoria expuesta al frontend publico o administrativo."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -20,6 +21,7 @@ class CategoryPublic(BaseModel):
 
 
 class CategoryAdminUpsert(BaseModel):
+    """Entrada administrativa para crear o actualizar categorias."""
     name: str = Field(min_length=1, max_length=120)
     description: str | None = None
     active: bool = True
@@ -32,6 +34,7 @@ class CategoryAdminUpsert(BaseModel):
 
 
 class ProductImagePublic(BaseModel):
+    """Imagen de galeria serializada hacia el frontend."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -40,6 +43,7 @@ class ProductImagePublic(BaseModel):
 
 
 class ProductImageUpsert(BaseModel):
+    """Entrada administrativa para agregar o editar imagenes."""
     image_url: str = Field(min_length=4, max_length=500)
     alt_text: str | None = None
 
@@ -84,6 +88,7 @@ class ProductPublic(BaseModel):
 
 
 class ProductAdminCreate(BaseModel):
+    """Entrada para crear un producto base en Catalog Service."""
     category_id: int
     name: str = Field(min_length=2, max_length=160)
     description: str = Field(min_length=2)
@@ -95,6 +100,7 @@ class ProductAdminCreate(BaseModel):
 
 
 class ProductAdminUpdate(BaseModel):
+    """Entrada parcial para actualizar campos comerciales del producto."""
     category_id: int | None = None
     name: str | None = Field(default=None, min_length=2, max_length=160)
     description: str | None = None
@@ -111,6 +117,7 @@ class ProductAdminUpdate(BaseModel):
 
 
 class RatingSummaryUpsert(BaseModel):
+    """Resumen de rating enviado por Commerce cuando cambian resenas."""
     product_id: int
     average: float = Field(ge=0, le=5)
     count: int = Field(ge=0)
@@ -122,6 +129,7 @@ class RatingSummaryUpsert(BaseModel):
 
 
 class StoreSettingPublic(BaseModel):
+    """Configuracion de tienda expuesta al frontend."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -137,6 +145,7 @@ class StoreSettingPublic(BaseModel):
 
 
 class StoreSettingUpdate(BaseModel):
+    """Actualizacion parcial de branding y parametros comerciales."""
     commercial_name: str | None = Field(default=None, min_length=2, max_length=120)
     logo_url: str | None = None
     primary_color: str | None = Field(default=None, max_length=20)
@@ -154,6 +163,7 @@ class StoreSettingUpdate(BaseModel):
 
 
 class InformativeMessagePublic(BaseModel):
+    """Mensaje informativo visible segun estado y fechas."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -166,6 +176,7 @@ class InformativeMessagePublic(BaseModel):
 
 
 class InformativeMessageAdminUpsert(BaseModel):
+    """Entrada administrativa para mensajes informativos."""
     title: str = Field(min_length=2, max_length=160)
     content: str
     type: str = Field(default="info", max_length=30)
@@ -175,4 +186,5 @@ class InformativeMessageAdminUpsert(BaseModel):
 
 
 class ApiMessage(BaseModel):
+    """Respuesta generica de confirmacion."""
     message: str

@@ -281,8 +281,8 @@ def payment_charge(order_id: str, amount: float, currency: str, token: str,
       - Aplica reintentos exponenciales si hay errores transitorios
 
     Devuelve dict {status_code, body}:
-      - 200 con body.status=APPROVED → pago exitoso
-      - 200 con body.status=REJECTED → pago rechazado (negocio)
+      - 201 con body.status=APPROVED → pago exitoso
+      - 201 con body.status=REJECTED → pago rechazado (negocio)
       - 503 → Circuit Breaker abierto (infra protectora)
       - otros → error inesperado
 

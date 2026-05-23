@@ -1,3 +1,4 @@
+"""Contratos Pydantic de Payment Service."""
 from app.schemas.payments import (
     ApiMessage,
     ChargeRequest,

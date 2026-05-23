@@ -1,3 +1,9 @@
+"""Helpers de auditoria del monolito legacy.
+
+Encapsulan la escritura de AuditLog y SystemLog para que rutas y middlewares
+registren cambios sin repetir la serializacion JSON de valores previos,
+nuevos o contexto tecnico.
+"""
 import json
 from typing import Any, Optional
 
@@ -16,6 +22,7 @@ def add_audit_log(
     previous_value: Optional[Any] = None,
     new_value: Optional[Any] = None,
 ) -> None:
+    """Agrega un evento de auditoria de dominio a la sesion actual."""
     db.add(
         AuditLog(
             user_id=user_id,
@@ -29,6 +36,7 @@ def add_audit_log(
 
 
 def add_system_log(db: Session, *, level: str, message: str, context: Optional[Any] = None) -> None:
+    """Agrega un evento tecnico usado por observabilidad basica."""
     db.add(
         SystemLog(
             level=level,
@@ -36,4 +44,3 @@ def add_system_log(db: Session, *, level: str, message: str, context: Optional[A
             context=json.dumps(context, default=str) if context is not None else None,
         )
     )
-

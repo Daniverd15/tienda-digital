@@ -1,3 +1,4 @@
+"""Entidades ORM de Commerce Service."""
 from app.models.entities import (
     Cart,
     CartItem,

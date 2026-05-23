@@ -6,6 +6,7 @@ from app.core.circuit_breaker import CBState, CircuitBreaker
 
 @pytest.fixture
 def cb():
+    """Circuit Breaker aislado para pruebas, reseteado antes y despues."""
     c = CircuitBreaker(name="test_cb", failure_threshold=3, open_ttl_seconds=2,
                        window_seconds=60)
     c.reset()
@@ -14,6 +15,7 @@ def cb():
 
 
 def test_initial_state_is_closed(cb):
+    """Un Circuit Breaker nuevo inicia CLOSED y permite la llamada."""
     assert cb.get_state() == CBState.CLOSED
     allowed, state = cb.allow()
     assert allowed is True
@@ -21,6 +23,7 @@ def test_initial_state_is_closed(cb):
 
 
 def test_opens_after_threshold(cb):
+    """Tres fallos consecutivos abren el circuito y bloquean llamadas."""
     for _ in range(cb.failure_threshold):
         cb.record_failure()
     assert cb.get_state() == CBState.OPEN
@@ -30,6 +33,7 @@ def test_opens_after_threshold(cb):
 
 
 def test_success_resets(cb):
+    """Un exito posterior reinicia fallos y mantiene el circuito cerrado."""
     cb.record_failure()
     cb.record_failure()
     cb.record_success()
@@ -37,6 +41,7 @@ def test_success_resets(cb):
 
 
 def test_stats_exposes_redis_flag_and_failures(cb):
+    """Las estadisticas exponen estado, contador y umbral operativo."""
     cb.record_failure()
     s = cb.stats()
     assert s["state"] == CBState.CLOSED.value

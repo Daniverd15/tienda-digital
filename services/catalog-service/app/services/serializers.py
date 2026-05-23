@@ -5,10 +5,12 @@ from app.models import Category, Product, ProductImage
 
 
 def money(value: Decimal | int | float | None) -> float:
+    """Convierte importes a float para respuestas JSON estables."""
     return float(value or 0)
 
 
 def serialize_category(category: Category) -> dict:
+    """Normaliza categorias para vistas publicas y administrativas."""
     return {
         "id": category.id,
         "name": category.name,
@@ -19,6 +21,7 @@ def serialize_category(category: Category) -> dict:
 
 
 def serialize_image(image: ProductImage) -> dict:
+    """Serializa una imagen de galeria con texto alternativo."""
     return {"id": image.id, "image_url": image.image_url, "alt_text": image.alt_text}
 
 
@@ -57,6 +60,7 @@ def serialize_product_summary(product: Product, stock_info: dict | None = None,
 def serialize_product_detail(
     product: Product, variants: list[dict] | None = None, inventory_available: bool = True
 ) -> dict:
+    """Construye la ficha completa de producto uniendo catalogo e inventario."""
     rating = product.rating
     return {
         "id": product.id,

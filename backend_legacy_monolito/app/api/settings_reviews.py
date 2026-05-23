@@ -1,3 +1,10 @@
+"""Configuracion de tienda, mensajes, auditoria y resenas del monolito.
+
+Une varias responsabilidades administrativas del MVP inicial: branding,
+mensajes informativos, moderacion de resenas, consulta de auditoria y creacion
+de resenas por clientes. En microservicios estas piezas se reparten entre
+Catalog Service y Commerce Service.
+"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
@@ -12,6 +19,7 @@ router = APIRouter(tags=["Configuracion y resenas"])
 
 
 def serialize_setting(setting: StoreSetting) -> dict:
+    """Serializa la configuracion visual y comercial de la tienda."""
     return {
         "id": setting.id,
         "commercial_name": setting.commercial_name,
@@ -27,6 +35,7 @@ def serialize_setting(setting: StoreSetting) -> dict:
 
 
 def serialize_message(message: InformativeMessage) -> dict:
+    """Serializa mensajes informativos con su estado y ventana de vigencia."""
     return {
         "id": message.id,
         "title": message.title,
@@ -40,6 +49,7 @@ def serialize_message(message: InformativeMessage) -> dict:
 
 @router.get("/admin/settings")
 def admin_get_settings(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Obtiene la configuracion actual para el formulario del administrador."""
     setting = db.query(StoreSetting).order_by(StoreSetting.id.asc()).first()
     if not setting:
         raise HTTPException(status_code=404, detail="Configuracion no encontrada.")
@@ -48,6 +58,7 @@ def admin_get_settings(admin: User = Depends(require_admin), db: Session = Depen
 
 @router.put("/admin/settings")
 def admin_update_settings(payload: SettingsIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Crea o actualiza la configuracion de tienda y registra auditoria."""
     setting = db.query(StoreSetting).order_by(StoreSetting.id.asc()).first()
     if not setting:
         setting = StoreSetting(**payload.model_dump())
@@ -65,11 +76,13 @@ def admin_update_settings(payload: SettingsIn, admin: User = Depends(require_adm
 
 @router.get("/admin/messages")
 def admin_messages(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lista mensajes informativos administrables."""
     return [serialize_message(message) for message in db.query(InformativeMessage).order_by(InformativeMessage.id.desc()).all()]
 
 
 @router.post("/admin/messages", status_code=status.HTTP_201_CREATED)
 def create_message(payload: MessageIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Crea un mensaje visible para clientes segun fechas y estado activo."""
     message = InformativeMessage(**payload.model_dump())
     db.add(message)
     db.flush()
@@ -81,6 +94,7 @@ def create_message(payload: MessageIn, admin: User = Depends(require_admin), db:
 
 @router.put("/admin/messages/{message_id}")
 def update_message(message_id: int, payload: MessageIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Edita contenido, tipo y ventana de publicacion de un mensaje."""
     message = db.query(InformativeMessage).filter(InformativeMessage.id == message_id).first()
     if not message:
         raise HTTPException(status_code=404, detail="Mensaje no encontrado.")
@@ -94,6 +108,7 @@ def update_message(message_id: int, payload: MessageIn, admin: User = Depends(re
 
 @router.delete("/admin/messages/{message_id}", response_model=ApiMessage)
 def delete_message(message_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Desactiva un mensaje sin eliminarlo fisicamente."""
     message = db.query(InformativeMessage).filter(InformativeMessage.id == message_id).first()
     if not message:
         raise HTTPException(status_code=404, detail="Mensaje no encontrado.")
@@ -105,6 +120,7 @@ def delete_message(message_id: int, admin: User = Depends(require_admin), db: Se
 
 @router.get("/admin/reviews")
 def admin_reviews(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lista resenas para moderacion administrativa."""
     reviews = db.query(Review).order_by(Review.id.desc()).all()
     return [
         {
@@ -123,6 +139,7 @@ def admin_reviews(admin: User = Depends(require_admin), db: Session = Depends(ge
 
 @router.patch("/admin/reviews/{review_id}")
 def update_review_status(review_id: int, approved: bool, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Aprueba o rechaza la visibilidad publica de una resena."""
     review = db.query(Review).filter(Review.id == review_id).first()
     if not review:
         raise HTTPException(status_code=404, detail="Reseña no encontrada.")
@@ -134,6 +151,7 @@ def update_review_status(review_id: int, approved: bool, admin: User = Depends(r
 
 @router.get("/admin/audit-logs")
 def audit_logs(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Expone los ultimos eventos de auditoria para trazabilidad."""
     logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(200).all()
     return [
         {
@@ -152,6 +170,7 @@ def audit_logs(admin: User = Depends(require_admin), db: Session = Depends(get_d
 
 @router.post("/reviews", status_code=status.HTTP_201_CREATED)
 def create_review(payload: ReviewIn, current_user: User = Depends(require_customer), db: Session = Depends(get_db)):
+    """Permite resenar solo productos comprados y entregados por el cliente."""
     product = db.query(Product).filter(Product.id == payload.product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado.")

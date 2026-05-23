@@ -49,6 +49,7 @@ class VariantInternal(BaseModel):
 
 
 class VariantAdminCreate(BaseModel):
+    """Entrada administrativa para crear una variante de producto."""
     product_id: int = Field(gt=0)
     sku: str = Field(min_length=2, max_length=80)
     color: str | None = Field(default=None, max_length=80)
@@ -62,6 +63,7 @@ class VariantAdminCreate(BaseModel):
 
 
 class VariantAdminUpdate(BaseModel):
+    """Entrada parcial para actualizar una variante sin tocar stock directo."""
     sku: str | None = Field(default=None, min_length=2, max_length=80)
     color: str | None = None
     color_hex: str | None = Field(default=None, max_length=9)
@@ -78,17 +80,20 @@ class VariantAdminUpdate(BaseModel):
 
 
 class ReserveItem(BaseModel):
+    """Linea de reserva solicitada por Commerce durante checkout."""
     variant_id: int
     quantity: int = Field(ge=1)
 
 
 class ReserveRequest(BaseModel):
+    """Solicitud atomica de reserva de stock para una orden logica."""
     order_id: str = Field(min_length=1, max_length=60)
     items: list[ReserveItem]
     ttl_seconds: int = Field(default=900, ge=60, le=3600)  # 15 min por defecto
 
 
 class ReservedLineResult(BaseModel):
+    """Linea confirmada de la respuesta de reserva."""
     variant_id: int
     sku: str
     quantity: int
@@ -97,6 +102,7 @@ class ReservedLineResult(BaseModel):
 
 
 class ReserveResponse(BaseModel):
+    """Respuesta de reserva con ids, vencimiento y subtotal calculado."""
     order_id: str
     reservation_ids: list[int]
     expires_at: datetime
@@ -105,6 +111,7 @@ class ReserveResponse(BaseModel):
 
 
 class ReleaseRequest(BaseModel):
+    """Solicitud de compensacion para liberar reservas pendientes."""
     order_id: str
     reason: str = Field(default="manual_release", max_length=120)
 
@@ -115,6 +122,7 @@ class ReleaseRequest(BaseModel):
 
 
 class StockMovementUpsert(BaseModel):
+    """Movimiento manual de inventario realizado por administracion."""
     variant_id: int
     movement_type: str = Field(pattern="^(entry|adjust|exit)$")
     quantity: int  # puede ser negativo para ajustes
@@ -122,6 +130,7 @@ class StockMovementUpsert(BaseModel):
 
 
 class StockMovementPublic(BaseModel):
+    """Movimiento de stock serializado para auditoria."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -141,6 +150,7 @@ class StockMovementPublic(BaseModel):
 
 
 class LowStockAlertPublic(BaseModel):
+    """Alerta de bajo stock visible para el administrador."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -163,4 +173,5 @@ class LowStockAlertPublic(BaseModel):
 
 
 class ApiMessage(BaseModel):
+    """Respuesta generica de confirmacion."""
     message: str

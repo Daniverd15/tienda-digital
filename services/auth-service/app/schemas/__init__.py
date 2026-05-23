@@ -1,3 +1,4 @@
+"""Contratos Pydantic expuestos por Auth Service."""
 from app.schemas.auth import (
     AccessLogPublic,
     AdminProfileUpdate,

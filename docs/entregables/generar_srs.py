@@ -35,6 +35,7 @@ CODE_BORDER  = "94A3B8"
 # =========================================================================
 
 def set_doc_lang(doc, lang="es-CO"):
+    """Define el idioma base del DOCX para corrector y metadatos de Word."""
     styles_element = doc.styles.element
     for rpr_default in styles_element.iter(qn("w:rPrDefault")):
         rpr = rpr_default.find(qn("w:rPr"))
@@ -51,6 +52,7 @@ def set_doc_lang(doc, lang="es-CO"):
 
 
 def set_margins(doc, top=2.2, bottom=2.2, left=2.5, right=2.5):
+    """Aplica margenes uniformes a todas las secciones del documento."""
     for section in doc.sections:
         section.top_margin = Cm(top)
         section.bottom_margin = Cm(bottom)
@@ -59,6 +61,7 @@ def set_margins(doc, top=2.2, bottom=2.2, left=2.5, right=2.5):
 
 
 def set_run(run, *, bold=False, italic=False, size=11, color=TEXT, font="Calibri"):
+    """Centraliza tipografia, color y enfasis para cada run de texto."""
     run.font.name = font
     r = run._element
     r.rPr.rFonts.set(qn("w:eastAsia"), font)
@@ -70,6 +73,7 @@ def set_run(run, *, bold=False, italic=False, size=11, color=TEXT, font="Calibri
 
 def add_para(doc, text, *, bold=False, italic=False, size=11, color=TEXT,
              align=WD_ALIGN_PARAGRAPH.JUSTIFY, before=4, after=6, indent=0):
+    """Agrega un parrafo normal con espaciado y estilo consistente."""
     p = doc.add_paragraph()
     p.alignment = align
     p.paragraph_format.space_before = Pt(before)
@@ -92,6 +96,7 @@ def add_h1(doc, text):
 
 
 def add_h2(doc, text):
+    """Agrega un encabezado H2 con la paleta corporativa del SRS."""
     p = doc.add_paragraph()
     p.paragraph_format.space_before = Pt(14)
     p.paragraph_format.space_after = Pt(4)
@@ -101,6 +106,7 @@ def add_h2(doc, text):
 
 
 def add_h3(doc, text):
+    """Agrega un encabezado H3 para subsecciones del SRS."""
     p = doc.add_paragraph()
     p.paragraph_format.space_before = Pt(10)
     p.paragraph_format.space_after = Pt(3)
@@ -110,6 +116,7 @@ def add_h3(doc, text):
 
 
 def add_h4(doc, text):
+    """Agrega un subtitulo compacto para bloques de detalle."""
     p = doc.add_paragraph()
     p.paragraph_format.space_before = Pt(8)
     p.paragraph_format.space_after = Pt(2)
@@ -119,6 +126,7 @@ def add_h4(doc, text):
 
 
 def add_bullet(doc, text, level=0, bold=False):
+    """Agrega un bullet con indentacion por nivel y formato uniforme."""
     p = doc.add_paragraph(style="List Bullet")
     p.paragraph_format.left_indent = Cm(0.6 + level * 0.6)
     p.paragraph_format.space_after = Pt(2)
@@ -128,6 +136,7 @@ def add_bullet(doc, text, level=0, bold=False):
 
 
 def _shade_cell(cell, fill_hex):
+    """Aplica color de fondo OOXML a una celda de tabla."""
     tc_pr = cell._tc.get_or_add_tcPr()
     shd = OxmlElement("w:shd")
     shd.set(qn("w:fill"), fill_hex)
@@ -1669,6 +1678,7 @@ end note
 # =========================================================================
 
 def construir_srs():
+    """Construye y guarda el SRS consolidado con requisitos y diagramas."""
     doc = Document()
     set_doc_lang(doc); set_margins(doc)
 

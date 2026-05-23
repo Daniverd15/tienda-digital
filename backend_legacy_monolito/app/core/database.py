@@ -1,3 +1,10 @@
+"""Conexion SQLAlchemy del monolito legacy.
+
+Define engine, session factory y Base declarativa usados por todas las rutas.
+El pool_pre_ping evita conexiones MySQL stale en desarrollo con Docker, y
+get_db entrega una sesion por request para que FastAPI cierre recursos al
+terminar cada operacion.
+"""
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -18,9 +25,9 @@ Base = declarative_base()
 
 
 def get_db():
+    """Dependency de FastAPI: abre una sesion y la cierra al finalizar."""
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-

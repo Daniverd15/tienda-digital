@@ -1,3 +1,4 @@
+"""Contratos Pydantic de Inventory Service."""
 from app.schemas.inventory import (
     ApiMessage,
     LowStockAlertPublic,

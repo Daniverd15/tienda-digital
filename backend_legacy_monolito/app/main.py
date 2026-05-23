@@ -1,3 +1,10 @@
+"""Punto de entrada FastAPI del monolito legacy.
+
+Compone routers, CORS, middlewares de observabilidad/seguridad y archivos
+estaticos de uploads. Aunque la entrega actual usa microservicios, este entry
+point documenta la version previa donde catalogo, carrito, pagos, pedidos,
+finanzas y configuracion vivian en una sola aplicacion.
+"""
 import os
 
 from fastapi import FastAPI
@@ -14,6 +21,7 @@ settings = get_settings()
 
 app = FastAPI(title=settings.app_name, version="1.0.0")
 
+# CORS habilita la SPA local de Vite para consumir el API durante desarrollo.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -25,6 +33,8 @@ app.add_middleware(
 app.middleware("http")(response_time_middleware)
 app.middleware("http")(security_headers_middleware)
 
+# Cada router agrupa un dominio funcional del monolito. El orden mantiene las
+# rutas publicas y administrativas disponibles bajo el mismo prefijo /api.
 app.include_router(auth.router)
 app.include_router(catalog.router)
 app.include_router(cart.router)
@@ -36,4 +46,6 @@ app.include_router(health.router)
 
 _uploads_dir = os.path.join(os.path.dirname(__file__), "..", "uploads")
 os.makedirs(_uploads_dir, exist_ok=True)
+# Las imagenes cargadas por administradores se sirven como estaticos para que
+# el catalogo pueda referenciarlas sin depender de un storage externo.
 app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
