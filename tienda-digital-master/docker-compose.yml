@@ -1,0 +1,246 @@
+# =============================================================================
+# Tienda Digital - docker-compose para arquitectura de microservicios (Fase 2)
+# =============================================================================
+# Niveles de alcance (ver Informe Fase 1, seccion 19.0):
+#  - Nivel 1 (MVP): mysql, redis, mailhog, api-gateway, los 5 servicios FastAPI
+#  - Nivel 2: + payment-mock (incluido aqui para simular pasarela)
+#  - Nivel 3: + rabbitmq + prometheus + grafana (no incluidos aun)
+#
+# Coexistencia con el monolito legacy: el monolito Fase 1 se preserva en
+# backend_legacy_monolito/ como referencia historica. NO se levanta con este
+# compose; para inspeccionarlo correrlo aisladamente en el host:
+#   cd backend_legacy_monolito && uvicorn main:app --port 8000
+# Apunta al esquema tienda_digital (el mismo MySQL).
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Persistencia y herramientas locales
+  # ---------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.4
+    container_name: tienda_digital_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: tienda_digital
+      MYSQL_USER: tienda_user
+      MYSQL_PASSWORD: tienda_password
+      MYSQL_ROOT_PASSWORD: root_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Schema y seed del monolito (compatibilidad con Ingenieria de Software)
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+      # Esquemas y usuarios separados para los microservicios
+      - ./database-init/01_create_databases.sql:/docker-entrypoint-initdb.d/03_create_databases.sql:ro
+      - ./database-init/02_create_users.sql:/docker-entrypoint-initdb.d/04_create_users.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [tienda_net]
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: tienda_phpmyadmin
+    ports:
+      - "8080:80"
+    environment:
+      PMA_HOST: mysql
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [tienda_net]
+
+  redis:
+    image: redis:7-alpine
+    container_name: tienda_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [tienda_net]
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: tienda_mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # UI web
+    networks: [tienda_net]
+
+  # ---------------------------------------------------------------------------
+  # API Gateway
+  # ---------------------------------------------------------------------------
+  api-gateway:
+    build: ./api-gateway
+    container_name: tienda_gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      auth-service:      { condition: service_healthy }
+      catalog-service:   { condition: service_healthy }
+      inventory-service: { condition: service_healthy }
+      commerce-service:  { condition: service_healthy }
+      payment-service:   { condition: service_healthy }
+    networks: [tienda_net]
+
+  # ---------------------------------------------------------------------------
+  # Microservicios FastAPI
+  # ---------------------------------------------------------------------------
+  auth-service:
+    build: ./services/auth-service
+    container_name: tienda_auth
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: auth-service
+      DATABASE_URL: mysql+pymysql://auth_user:auth_pass@mysql:3306/auth_db?charset=utf8mb4
+      JWT_SECRET: cambiar_en_produccion_pero_compartido_entre_servicios
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_FROM: no-reply@tiendadigital.local
+    ports:
+      - "8001:8001"
+    depends_on:
+      mysql: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [tienda_net]
+
+  catalog-service:
+    build: ./services/catalog-service
+    container_name: tienda_catalog
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: catalog-service
+      DATABASE_URL: mysql+pymysql://catalog_user:catalog_pass@mysql:3306/catalog_db?charset=utf8mb4
+      JWT_SECRET: cambiar_en_produccion_pero_compartido_entre_servicios
+      REDIS_URL: redis://redis:6379/0
+      INVENTORY_SERVICE_URL: http://inventory-service:8003
+    ports:
+      - "8002:8002"
+    volumes:
+      - catalog_uploads:/app/uploads
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8002/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [tienda_net]
+
+  inventory-service:
+    build: ./services/inventory-service
+    container_name: tienda_inventory
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: inventory-service
+      DATABASE_URL: mysql+pymysql://inventory_user:inventory_pass@mysql:3306/inventory_db?charset=utf8mb4
+      JWT_SECRET: cambiar_en_produccion_pero_compartido_entre_servicios
+      REDIS_URL: redis://redis:6379/0
+      CATALOG_SERVICE_URL: http://catalog-service:8002
+    ports:
+      - "8003:8003"
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [tienda_net]
+
+  commerce-service:
+    build: ./services/commerce-service
+    container_name: tienda_commerce
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: commerce-service
+      DATABASE_URL: mysql+pymysql://commerce_user:commerce_pass@mysql:3306/commerce_db?charset=utf8mb4
+      JWT_SECRET: cambiar_en_produccion_pero_compartido_entre_servicios
+      REDIS_URL: redis://redis:6379/0
+      INVENTORY_SERVICE_URL: http://inventory-service:8003
+      PAYMENT_SERVICE_URL: http://payment-service:8005
+      CATALOG_SERVICE_URL: http://catalog-service:8002
+      AUTH_SERVICE_URL: http://auth-service:8001
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_FROM: no-reply@tiendadigital.local
+    ports:
+      - "8004:8004"
+    depends_on:
+      mysql: { condition: service_healthy }
+      inventory-service: { condition: service_started }
+      payment-service: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8004/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [tienda_net]
+
+  payment-service:
+    build: ./services/payment-service
+    container_name: tienda_payment
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: payment-service
+      DATABASE_URL: mysql+pymysql://payments_user:payments_pass@mysql:3306/payments_db?charset=utf8mb4
+      JWT_SECRET: cambiar_en_produccion_pero_compartido_entre_servicios
+      REDIS_URL: redis://redis:6379/0
+      PAYMENT_MOCK_URL: http://payment-mock:9000
+    ports:
+      - "8005:8005"
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      payment-mock: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8005/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [tienda_net]
+
+  payment-mock:
+    build: ./payment-mock
+    container_name: tienda_payment_mock
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:9000/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [tienda_net]
+
+# ---------------------------------------------------------------------------
+volumes:
+  mysql_data:
+  catalog_uploads:
+
+networks:
+  tienda_net:
+    driver: bridge

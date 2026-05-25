@@ -1,0 +1,24 @@
+"""Configuracion por variable de entorno."""
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Variables de entorno y URLs de servicios vecinos de Commerce."""
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    service_name: str = "commerce-service"
+    service_port: int = 8004
+    database_url: str = "mysql+pymysql://commerce_user:commerce_pass@mysql:3306/commerce_db?charset=utf8mb4"
+    jwt_secret: str = "cambiar_en_produccion_pero_compartido_entre_servicios"
+    jwt_algorithm: str = "HS256"
+    redis_url: str = "redis://redis:6379/0"
+    smtp_host: str = "mailhog"
+    smtp_port: int = 1025
+    smtp_from: str = "no-reply@tiendadigital.local"
+    catalog_service_url: str = "http://catalog-service:8002"
+    inventory_service_url: str = "http://inventory-service:8003"
+    payment_service_url: str = "http://payment-service:8005"
+    auth_service_url: str = "http://auth-service:8001"
+
+
+settings = Settings()

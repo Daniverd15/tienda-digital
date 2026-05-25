@@ -1,0 +1,986 @@
+{
+  "info": {
+    "name": "Tienda Digital — Arquitectura de Microservicios",
+    "_postman_id": "tienda-digital-fase2-2026",
+    "description": "Colección completa de la Tienda Digital en arquitectura de microservicios (Fase 2). Todos los requests apuntan al API Gateway en http://localhost/api. Ejecutar el flujo en orden: 1) Auth → 2) Catalog → 3) Inventory → 4) Commerce → 5) Payment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost/api", "type": "string" },
+    { "key": "admin_email", "value": "admin@tienda.com", "type": "string" },
+    { "key": "admin_password", "value": "Admin1234*", "type": "string" },
+    { "key": "admin_token", "value": "", "type": "string" },
+    { "key": "client_token", "value": "", "type": "string" },
+    { "key": "client_email", "value": "cliente@prueba.com", "type": "string" },
+    { "key": "client_password", "value": "Cliente1234*", "type": "string" },
+    { "key": "order_id", "value": "", "type": "string" },
+    { "key": "order_code", "value": "", "type": "string" },
+    { "key": "product_id", "value": "1", "type": "string" },
+    { "key": "variant_id", "value": "1", "type": "string" },
+    { "key": "review_id", "value": "", "type": "string" },
+    { "key": "payment_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "00 — Healthchecks",
+      "item": [
+        {
+          "name": "Gateway health",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost/health/gateway"
+          },
+          "response": []
+        },
+        {
+          "name": "Auth health",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost/health/auth"
+          },
+          "response": []
+        },
+        {
+          "name": "Catalog health",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost/health/catalog"
+          },
+          "response": []
+        },
+        {
+          "name": "Inventory health",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost/health/inventory"
+          },
+          "response": []
+        },
+        {
+          "name": "Commerce health",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost/health/commerce"
+          },
+          "response": []
+        },
+        {
+          "name": "Payment health",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost/health/payment"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "01 — Auth Service",
+      "item": [
+        {
+          "name": "Registrar cliente nuevo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  var body = pm.response.json();",
+                  "  pm.collectionVariables.set('client_token', body.access_token);",
+                  "  console.log('Cliente registrado, token guardado');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Cliente Prueba\",\n  \"email\": \"{{client_email}}\",\n  \"phone\": \"3001234567\",\n  \"password\": \"{{client_password}}\"\n}"
+            },
+            "url": "{{base_url}}/auth/register"
+          },
+          "response": []
+        },
+        {
+          "name": "Login cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  pm.collectionVariables.set('client_token', body.access_token);",
+                  "  console.log('Client token guardado');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{client_email}}\",\n  \"password\": \"{{client_password}}\"\n}"
+            },
+            "url": "{{base_url}}/auth/login"
+          },
+          "response": []
+        },
+        {
+          "name": "Login admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  pm.collectionVariables.set('admin_token', body.access_token);",
+                  "  console.log('Admin token guardado');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            },
+            "url": "{{base_url}}/auth/login"
+          },
+          "response": []
+        },
+        {
+          "name": "Login admin — credencial incorrecta (espera 401)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@tienda.com\",\n  \"password\": \"INCORRECTA\"\n}"
+            },
+            "url": "{{base_url}}/auth/login"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /auth/me (cliente)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": "{{base_url}}/auth/me"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /auth/me sin token (espera 401)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/auth/me"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /admin/customers con token cliente (espera 403)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": "{{base_url}}/admin/customers"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /admin/customers (admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/admin/customers"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /admin/access-logs (admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/admin/access-logs"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /auth/logout (cliente)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": "{{base_url}}/auth/logout"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 — Catalog Service (Cache-Aside)",
+      "item": [
+        {
+          "name": "GET /catalog (overview público)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/catalog"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /products (lista pública)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/products"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /products?q=camiseta (búsqueda)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/products?q=camiseta",
+              "query": [{ "key": "q", "value": "camiseta" }],
+              "host": ["{{base_url}}"],
+              "path": ["products"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /products/{id} (detalle + variantes Inventory)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/products/{{product_id}}"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /categories",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/categories"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /store/settings",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/store/settings"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /store/messages",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/store/messages"
+          },
+          "response": []
+        },
+        {
+          "name": "Admin — GET /admin/products",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/admin/products"
+          },
+          "response": []
+        },
+        {
+          "name": "Admin — POST /admin/products (crear producto)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Producto de prueba\",\n  \"description\": \"Descripcion del producto\",\n  \"category_id\": 1,\n  \"base_price\": 50000,\n  \"active\": true\n}"
+            },
+            "url": "{{base_url}}/admin/products"
+          },
+          "response": []
+        },
+        {
+          "name": "Admin — GET /admin/categories",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/admin/categories"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 — Inventory Service (Lock distribuido)",
+      "item": [
+        {
+          "name": "GET variantes de producto",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/inventory/products/{{product_id}}/variants"
+          },
+          "response": []
+        },
+        {
+          "name": "GET detalle de variante",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/inventory/variants/{{variant_id}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Admin — GET /admin/variants",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/admin/variants"
+          },
+          "response": []
+        },
+        {
+          "name": "Admin — GET /admin/inventory/alerts (stock mínimo)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/admin/inventory/alerts"
+          },
+          "response": []
+        },
+        {
+          "name": "Admin — GET /admin/inventory/movements",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/admin/inventory/movements"
+          },
+          "response": []
+        },
+        {
+          "name": "Admin — POST /admin/inventory/expire-pending (forzar expiración)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/admin/inventory/expire-pending"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 — Commerce Service (SAGA)",
+      "item": [
+        {
+          "name": "GET /cart (vacío al inicio)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": "{{base_url}}/cart"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /cart/items — agregar variante 1 (2 unidades)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"variant_id\": 1,\n  \"quantity\": 2\n}"
+            },
+            "url": "{{base_url}}/cart/items"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /cart/items — agregar variante 6 (1 unidad)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"variant_id\": 6,\n  \"quantity\": 1\n}"
+            },
+            "url": "{{base_url}}/cart/items"
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /cart (vaciar carrito)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": "{{base_url}}/cart"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /checkout — APPROVED (monto .00) [SAGA completa]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  var body = pm.response.json();",
+                  "  pm.collectionVariables.set('order_id', body.order_id.toString());",
+                  "  pm.collectionVariables.set('order_code', body.order_code);",
+                  "  console.log('Order creada:', body.order_id, body.status);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "checkout-demo-001" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"delivery_name\": \"Cliente Prueba\",\n  \"delivery_address\": \"Calle 100 #20-30\",\n  \"delivery_city\": \"Bogota\",\n  \"billing_document\": \"1024567890\",\n  \"contact_phone\": \"3001234567\",\n  \"contact_email\": \"{{client_email}}\"\n}"
+            },
+            "url": "{{base_url}}/checkout"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /checkout — REJECTED (monto .77) [compensación SAGA]",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "checkout-demo-rejected-001" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"delivery_name\": \"Cliente Prueba\",\n  \"delivery_address\": \"Calle 100 #20-30\",\n  \"delivery_city\": \"Bogota\",\n  \"billing_document\": \"1024567890\",\n  \"contact_phone\": \"3001234567\",\n  \"contact_email\": \"{{client_email}}\"\n}"
+            },
+            "url": "{{base_url}}/checkout",
+            "description": "NOTA: Para que el pago sea REJECTED, el subtotal del carrito debe terminar en .77 centavos. Ajustar cantidades para lograrlo, o usar /api/payments directo con amount=100.77"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /orders/mine",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": "{{base_url}}/orders/mine"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /orders/{order_id}",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": "{{base_url}}/orders/{{order_id}}"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /notifications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": "{{base_url}}/notifications"
+          },
+          "response": []
+        },
+        {
+          "name": "Admin — PATCH /admin/orders/{id}/status → EN_PREPARACION",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"new_status\": \"EN_PREPARACION\",\n  \"notes\": \"Pedido en preparacion\"\n}"
+            },
+            "url": "{{base_url}}/admin/orders/{{order_id}}/status"
+          },
+          "response": []
+        },
+        {
+          "name": "Admin — PATCH /admin/orders/{id}/status → ENVIADO",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"new_status\": \"ENVIADO\",\n  \"notes\": \"Pedido enviado por mensajero\"\n}"
+            },
+            "url": "{{base_url}}/admin/orders/{{order_id}}/status"
+          },
+          "response": []
+        },
+        {
+          "name": "Admin — PATCH /admin/orders/{id}/status → ENTREGADO",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"new_status\": \"ENTREGADO\",\n  \"notes\": \"Entregado al cliente\"\n}"
+            },
+            "url": "{{base_url}}/admin/orders/{{order_id}}/status"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /reviews (requiere order ENTREGADO)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  var body = pm.response.json();",
+                  "  pm.collectionVariables.set('review_id', body.id.toString());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": 1,\n  \"order_id\": {{order_id}},\n  \"rating\": 5,\n  \"comment\": \"Excelente producto, muy buena calidad!\"\n}"
+            },
+            "url": "{{base_url}}/reviews"
+          },
+          "response": []
+        },
+        {
+          "name": "Admin — PATCH /admin/reviews/{id}/approve",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/admin/reviews/{{review_id}}/approve"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /admin/finance/summary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/admin/finance/summary"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /admin/orders",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/admin/orders"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /admin/audit-logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/admin/audit-logs"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05 — Payment Service (Circuit Breaker)",
+      "item": [
+        {
+          "name": "POST /payments — APPROVED (monto .00)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  pm.collectionVariables.set('payment_id', body.payment_id || '');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"demo-manual-001\",\n  \"amount\": 50000.00\n}"
+            },
+            "url": "{{base_url}}/payments",
+            "description": "Monto .00 → APPROVED"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /payments — REJECTED (monto .77)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"demo-rejected-001\",\n  \"amount\": 50000.77\n}"
+            },
+            "url": "{{base_url}}/payments",
+            "description": "Monto .77 → REJECTED"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /payments — PENDING (monto .99)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"demo-pending-001\",\n  \"amount\": 50000.99\n}"
+            },
+            "url": "{{base_url}}/payments",
+            "description": "Monto .99 → PENDING"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /payments — FALLO infraestructura (monto .88) [dispara CB]",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"demo-fail-001\",\n  \"amount\": 50000.88\n}"
+            },
+            "url": "{{base_url}}/payments",
+            "description": "Monto .88 → mock devuelve 500. Ejecutar 5 veces para abrir el Circuit Breaker"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /payments/circuit/state",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/payments/circuit/state",
+            "description": "Ver estado: CLOSED / OPEN / HALF_OPEN + contador de fallos + TTL restante"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /payments/circuit/reset (admin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/payments/circuit/reset",
+            "description": "Resetea el CB a CLOSED. Usar después de abrir el CB para restaurar operación normal"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "06 — Seguridad y casos negativos",
+      "item": [
+        {
+          "name": "Sin token → 401",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/auth/me",
+            "description": "Espera HTTP 401"
+          },
+          "response": []
+        },
+        {
+          "name": "JWT corrupto → 401",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer not.a.real.jwt" }],
+            "url": "{{base_url}}/auth/me",
+            "description": "Espera HTTP 401"
+          },
+          "response": []
+        },
+        {
+          "name": "Token cliente en ruta admin → 403",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": "{{base_url}}/admin/customers",
+            "description": "Espera HTTP 403 Forbidden"
+          },
+          "response": []
+        },
+        {
+          "name": "Security headers (verificar en Headers de respuesta)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/catalog",
+            "description": "Verificar en la pestaña Headers de la respuesta: X-Content-Type-Options, X-Frame-Options, Referrer-Policy"
+          },
+          "response": []
+        },
+        {
+          "name": "Rate limit login (ejecutar 6 veces rápido → 6to da 429)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@tienda.com\",\n  \"password\": \"wrong\"\n}"
+            },
+            "url": "{{base_url}}/auth/login",
+            "description": "Ejecutar este request 6 veces seguidas (Ctrl+Enter × 6). El 6to intento debe devolver 429 Too Many Requests"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "07 — Flujo completo de demostración",
+      "item": [
+        {
+          "name": "PASO 1 — Login admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var body = pm.response.json();",
+                  "pm.collectionVariables.set('admin_token', body.access_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@tienda.com\",\n  \"password\": \"Admin1234*\"\n}"
+            },
+            "url": "{{base_url}}/auth/login"
+          },
+          "response": []
+        },
+        {
+          "name": "PASO 2 — Registrar nuevo cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var body = pm.response.json();",
+                  "pm.collectionVariables.set('client_token', body.access_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Demo Sustentacion\",\n  \"email\": \"sustentacion@demo.com\",\n  \"phone\": \"3009876543\",\n  \"password\": \"Demo1234*\"\n}"
+            },
+            "url": "{{base_url}}/auth/register"
+          },
+          "response": []
+        },
+        {
+          "name": "PASO 3 — Ver catálogo (Cache-Aside activo)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/products"
+          },
+          "response": []
+        },
+        {
+          "name": "PASO 4 — Agregar al carrito",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"variant_id\": 1,\n  \"quantity\": 1\n}"
+            },
+            "url": "{{base_url}}/cart/items"
+          },
+          "response": []
+        },
+        {
+          "name": "PASO 5 — Checkout APPROVED (SAGA completa)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  var body = pm.response.json();",
+                  "  pm.collectionVariables.set('order_id', body.order_id.toString());",
+                  "  pm.collectionVariables.set('order_code', body.order_code);",
+                  "  pm.test('Order PAID', function() { pm.expect(body.status).to.eql('PAID'); });",
+                  "  pm.test('Payment APPROVED', function() { pm.expect(body.payment_status).to.eql('APPROVED'); });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "demo-sustentacion-{{$timestamp}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"delivery_name\": \"Demo Sustentacion\",\n  \"delivery_address\": \"Av Principal 123\",\n  \"delivery_city\": \"Bucaramanga\",\n  \"billing_document\": \"1098765432\",\n  \"contact_phone\": \"3009876543\",\n  \"contact_email\": \"sustentacion@demo.com\"\n}"
+            },
+            "url": "{{base_url}}/checkout"
+          },
+          "response": []
+        },
+        {
+          "name": "PASO 6 — Ver stock bajado en Inventory",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/inventory/variants/1",
+            "description": "El campo 'available' debe haber bajado respecto al valor antes del checkout"
+          },
+          "response": []
+        },
+        {
+          "name": "PASO 7 — Ver pedido en historial",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": "{{base_url}}/orders/mine"
+          },
+          "response": []
+        },
+        {
+          "name": "PASO 8 — Verificar email en Mailhog",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8025",
+            "description": "Abrir http://localhost:8025 en el navegador. Deben aparecer: correo de bienvenida del registro + correo de compra exitosa"
+          },
+          "response": []
+        },
+        {
+          "name": "PASO 9 — Estado del CB (debe ser CLOSED)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/payments/circuit/state"
+          },
+          "response": []
+        },
+        {
+          "name": "PASO 10 — Abrir CB con 5 fallos (monto .88)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"cb-demo-{{$timestamp}}\",\n  \"amount\": 99999.88\n}"
+            },
+            "url": "{{base_url}}/payments",
+            "description": "Ejecutar 5 veces. Cada vez el mock responde 500. Al quinto, el CB abre"
+          },
+          "response": []
+        },
+        {
+          "name": "PASO 11 — Verificar CB OPEN",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/payments/circuit/state",
+            "description": "state debe ser OPEN, failures >= 5"
+          },
+          "response": []
+        },
+        {
+          "name": "PASO 12 — Reset CB (admin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/payments/circuit/reset"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+# Entornos
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Backend (monolito legacy + microservicios)
+backend_legacy_monolito/.pytest_cache/
+backend_legacy_monolito/htmlcov/
+backend_legacy_monolito/.coverage
+services/**/.pytest_cache/
+services/**/htmlcov/
+services/**/.coverage
+services/**/.env
+payment-mock/.env
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Base de datos y respaldos locales
+database/backups/
+*.sql.gz
+
+# IDE / SO
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+~$*.docx
